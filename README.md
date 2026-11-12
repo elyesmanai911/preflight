@@ -1,5 +1,7 @@
 # Preflight
 
+[![CI](https://github.com/elyesmanai911/preflight/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/elyesmanai911/preflight/actions/workflows/ci.yml)
+
 **Preview environments for every pull request, plus an AI release agent that explains them.**
 
 Preflight is a GitOps platform where every pull request automatically gets an ephemeral
@@ -7,7 +9,7 @@ Kubernetes environment. An AI release agent then posts one PR comment that risk-
 diff, summarizes security scan findings, triages failed deployments from live logs, and
 estimates the environment's cost. When the PR closes, the environment is torn down.
 
-> 🚧 **Status: Phase 0 of 6.** The demo app and the plan are in place; the platform is being
+> 🚧 **Status: Phase 1 of 6.** The demo app and its CI pipeline are in place; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
 ## How it will work
@@ -70,7 +72,7 @@ docker run --rm -p 8000:8000 preflight-app:dev
 ## Roadmap
 
 - [x] **Phase 0: skeleton and story.** README, demo app, Dockerfile, tests (`v0.1`)
-- [ ] **Phase 1: CI pipeline.** GitHub Actions, GHCR, Trivy with SARIF, branch protection (`v0.2`)
+- [x] **Phase 1: CI pipeline.** GitHub Actions, GHCR, Trivy with SARIF, branch protection (`v0.2`)
 - [ ] **Phase 2: preview environments.** k3d, Argo CD ApplicationSet PR generator, Helm, per-PR ingress (`v0.3`)
 - [ ] **Phase 3: AI agent v1.** diff risk summary and CVE digest as a PR comment (`v0.4`)
 - [ ] **Phase 4: AI incident triage.** Prometheus, Loki, root-cause comments on broken PRs (`v0.5`)
