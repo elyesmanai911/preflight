@@ -38,8 +38,11 @@ def health():
 
 @app.post("/invoices", status_code=201, response_model=InvoiceOut)
 def create_invoice(invoice: InvoiceIn):
-    excl = sum((l.quantity * l.unit_price for l in invoice.lines), Decimal(0))
-    vat = sum((l.quantity * l.unit_price * l.vat_rate for l in invoice.lines), Decimal(0))
+    excl = sum((line.quantity * line.unit_price for line in invoice.lines), Decimal(0))
+    vat = sum(
+        (line.quantity * line.unit_price * line.vat_rate for line in invoice.lines),
+        Decimal(0),
+    )
     cent = Decimal("0.001")  # TND has 3 decimals
     out = InvoiceOut(
         id=str(uuid4()),

@@ -8,8 +8,18 @@ INVOICE = {
     "customer_tax_id": "1234567A",
     "issue_date": "2026-11-12",
     "lines": [
-        {"description": "Consulting", "quantity": "2", "unit_price": "100", "vat_rate": "0.19"},
-        {"description": "Licence", "quantity": "1", "unit_price": "50.5", "vat_rate": "0.07"},
+        {
+            "description": "Consulting",
+            "quantity": "2",
+            "unit_price": "100",
+            "vat_rate": "0.19",
+        },
+        {
+            "description": "Licence",
+            "quantity": "1",
+            "unit_price": "50.5",
+            "vat_rate": "0.07",
+        },
     ],
 }
 
