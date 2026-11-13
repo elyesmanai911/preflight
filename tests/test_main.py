@@ -65,3 +65,10 @@ def test_rejects_negative_quantity():
 
 def test_unknown_invoice_returns_404():
     assert client.get("/invoices/nope").status_code == 404
+
+
+def test_metrics_count_scored_invoices():
+    client.post("/invoices", json=INVOICE)
+    r = client.get("/metrics/")
+    assert r.status_code == 200
+    assert 'preflight_invoices_scored_total{flagged="false"}' in r.text
