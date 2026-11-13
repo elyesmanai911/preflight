@@ -39,6 +39,27 @@ jobs:
           name: model-metrics
           path: model/metrics.json
 
+  triage-image:
+    # The in-cluster triage watcher; the CronJob runs the :main tag.
+    if: github.event_name == 'push'
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/preflight-triage
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          docker build -f agent/Dockerfile -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:main" .
+          docker push --all-tags "$IMAGE"
+
   image:
     needs: lint-and-test # only build images from code that passed
     runs-on: ubuntu-latest

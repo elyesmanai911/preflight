@@ -1,0 +1,22 @@
+# The triage watcher, deployed by Argo CD from this repo.
+# Needs two secrets in preflight-system first (see README): github-token, llm-api-key.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: preflight-triage
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/elyesmanai911/preflight.git
+    targetRevision: main
+    path: platform/triage/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: preflight-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
