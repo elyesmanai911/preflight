@@ -31,7 +31,7 @@ spec:
           valuesObject:
             image:
               tag: "{{ .head_sha }}" # CI pushes this tag
-            host: "pr-{{ .number }}.127.0.0.1.nip.io"
+            host: "pr-{{ .number }}.preview.127.0.0.1.nip.io"
             manageNamespace: true
       destination:
         server: https://kubernetes.default.svc

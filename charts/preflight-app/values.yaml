@@ -2,7 +2,7 @@ image:
   repository: ghcr.io/elyesmanai911/preflight-app
   tag: "" # set per PR by the ApplicationSet (commit SHA)
 
-# Public hostname, e.g. pr-4.127.0.0.1.nip.io
+# Public hostname, e.g. pr-4.preview.127.0.0.1.nip.io
 host: ""
 
 resources:
