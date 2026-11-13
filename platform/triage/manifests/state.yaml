@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: preflight-triage-state
+  namespace: preflight-system
+  annotations:
+    # The watcher writes here; Argo CD must not reset it on every sync.
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: Prune=false
+data: {}
