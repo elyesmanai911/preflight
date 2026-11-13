@@ -28,6 +28,17 @@ jobs:
       - name: Test
         run: pytest -q
 
+      - name: Train model + quality gate
+        run: |
+          python -m ml.train
+          { echo "### Model metrics"; echo '```json'; cat model/metrics.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload model metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-metrics
+          path: model/metrics.json
+
   image:
     needs: lint-and-test # only build images from code that passed
     runs-on: ubuntu-latest
