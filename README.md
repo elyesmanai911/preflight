@@ -101,6 +101,9 @@ It speaks plain HTTP to any OpenAI-compatible `/chat/completions` endpoint:
 | `LLM_API_KEY` | repo secret | not needed |
 | `LLM_TIMEOUT` | 180 s | 900 s (CPU inference) |
 
+Requests use JSON mode (`response_format: json_object`): without it, Gemini sometimes answered in
+Markdown even when told to return JSON.
+
 ### Run it against Ollama
 
 ```bash
@@ -121,10 +124,10 @@ LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5:3b LLM_TIMEOUT=900 \
 
 | | Gemini Flash-Lite (free tier) | qwen2.5:3b on Ollama (2 CPUs, 6 GB VM) |
 |---|---|---|
-| Time | ~5 s | ~4 min 40 s (4.3K prompt tokens at ~25 tok/s) |
+| Time | ~5 s | ~3–5 min (4.3K prompt tokens at ~25 tok/s) |
 | Understood the diff | yes | vague |
-| Stated facts correctly | yes | claimed a metric drop that didn't happen |
-| CVE triage | selective | listed 15 CVEs as "fix now" |
+| Stated facts correctly | yes | run 1 claimed a metric drop that didn't happen; run 2 claimed there were no HIGH CVEs (there are 52) |
+| CVE triage | selective | run 1 listed 15 CVEs as "fix now"; run 2 said "nothing urgent" |
 | Data leaves the machine | yes | no |
 
 The small local model proves the agent runs fully self-hosted, but it isn't a reliable reviewer.
