@@ -10,7 +10,7 @@ one PR comment that risk-scores the diff, compares model metrics against `main`,
 security scan findings, triages failed deployments from live logs, and estimates the
 environment's cost. When the PR closes, the environment is torn down.
 
-> 🚧 **Status: Phase 3 of 7.** Every PR gets its own preview environment serving its own model; the platform is being
+> 🚧 **Status: Phase 4 of 7.** Every PR gets a preview environment serving its own model, and an AI-written report; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
 ## How it will work
@@ -85,6 +85,51 @@ docker build -t preflight-app:dev .
 docker run --rm -p 8000:8000 preflight-app:dev
 ```
 
+## The release agent
+
+`agent/review.py` writes one **Preflight report** comment per PR, edited in place on every push.
+**Facts are computed in code** (preview URL, metric table vs `main`, CVE counts); **the LLM only
+adds judgement** (risk level, what to test, which CVEs to fix now, what a metric change means).
+If the LLM fails or is rate-limited (after 2 retries), the comment still posts with the facts.
+
+It speaks plain HTTP to any OpenAI-compatible `/chat/completions` endpoint:
+
+| Setting | CI (default) | Local, self-hosted |
+|---|---|---|
+| `LLM_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | `http://localhost:11434/v1` |
+| `LLM_MODEL` | repo variable, currently `gemini-flash-lite-latest` | `qwen2.5:3b` |
+| `LLM_API_KEY` | repo secret | not needed |
+| `LLM_TIMEOUT` | 180 s | 900 s (CPU inference) |
+
+### Run it against Ollama
+
+```bash
+curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.40.13 sh
+# Ollama's default context (~2K tokens) silently truncates the prompt; raise it:
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+printf '[Service]\nEnvironment="OLLAMA_CONTEXT_LENGTH=8192"\n' | sudo tee /etc/systemd/system/ollama.service.d/context.conf
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+ollama pull qwen2.5:3b
+
+gh pr diff <N> > pr.diff
+LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5:3b LLM_TIMEOUT=900 \
+  python -m agent.review --diff pr.diff --trivy trivy.json --metrics model/metrics.json \
+  --preview-url http://pr-<N>.preview.127.0.0.1.nip.io:8080 --image local
+```
+
+### Hosted vs self-hosted, measured on the same PR
+
+| | Gemini Flash-Lite (free tier) | qwen2.5:3b on Ollama (2 CPUs, 6 GB VM) |
+|---|---|---|
+| Time | ~5 s | ~4 min 40 s (4.3K prompt tokens at ~25 tok/s) |
+| Understood the diff | yes | vague |
+| Stated facts correctly | yes | claimed a metric drop that didn't happen |
+| CVE triage | selective | listed 15 CVEs as "fix now" |
+| Data leaves the machine | yes | no |
+
+The small local model proves the agent runs fully self-hosted, but it isn't a reliable reviewer.
+That's why the numbers in the comment never come from the LLM.
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.
@@ -115,7 +160,7 @@ http://localhost:8081 as `admin` with the password from
 - [x] **Phase 1: CI pipeline.** GitHub Actions, GHCR, Trivy with SARIF, branch protection (`v0.2`)
 - [x] **Phase 2: preview environments.** k3d, Argo CD ApplicationSet PR generator, Helm, per-PR ingress (`v0.3`)
 - [x] **Phase 3: model lifecycle.** synthetic data, training, quality gate, model versioned per image and per PR (`v0.4`)
-- [ ] **Phase 4: AI agent v1.** diff risk, CVE digest, model report; free LLM API in CI, Ollama locally (`v0.5`)
+- [x] **Phase 4: AI agent v1.** diff risk, CVE digest, model report; free LLM API in CI, Ollama locally (`v0.5`)
 - [ ] **Phase 5: AI incident triage + monitoring.** Prometheus, Loki, prediction metrics, root-cause comments on broken PRs (`v0.6`)
 - [ ] **Phase 6: FinOps and guardrails.** cost estimate, ResourceQuota, TTL reaper (`v0.7`)
 - [ ] **Phase 7: cloud demo.** Terraform on Azure, Key Vault with External Secrets, demo video (`v1.0`)
