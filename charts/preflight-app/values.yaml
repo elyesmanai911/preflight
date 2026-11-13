@@ -1,0 +1,16 @@
+image:
+  repository: ghcr.io/elyesmanai911/preflight-app
+  tag: "" # set per PR by the ApplicationSet (commit SHA)
+
+# Public hostname, e.g. pr-4.preview.127.0.0.1.nip.io
+host: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+# true for preview environments: the chart creates (and on deletion removes) its namespace
+manageNamespace: false

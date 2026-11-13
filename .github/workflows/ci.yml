@@ -35,8 +35,11 @@ jobs:
       contents: read
       packages: write # push to GHCR
       security-events: write # upload Trivy results to the Security tab
+      pull-requests: write # post the preview URL comment
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/preflight-app:${{ github.sha }}
+      # On PRs, github.sha is a temporary merge commit; tag with the PR's head commit,
+      # which is what the Argo CD ApplicationSet deploys.
+      IMAGE: ghcr.io/${{ github.repository_owner }}/preflight-app:${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,3 +64,13 @@ jobs:
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy.sarif
+
+      - name: Comment preview URL
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR" --repo "${{ github.repository }}" --edit-last --create-if-none --body \
+            "🔗 **Preview:** http://pr-$PR.preview.127.0.0.1.nip.io:8080 (local k3d cluster)
+          Image: \`$IMAGE\`"

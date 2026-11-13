@@ -1,0 +1,7 @@
+{{- if .Values.manageNamespace }}
+# Owned by the chart so Argo CD deletes the whole namespace when the PR closes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+{{- end }}

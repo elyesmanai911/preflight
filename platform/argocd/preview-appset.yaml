@@ -1,0 +1,42 @@
+# One Argo CD Application per open pull request.
+# Apply: kubectl apply -f platform/argocd/preview-appset.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: preflight-previews
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - pullRequest:
+        github:
+          owner: elyesmanai911
+          repo: preflight
+        # No token: the public API allows 60 requests/hour, so poll every 2 minutes.
+        requeueAfterSeconds: 120
+  template:
+    metadata:
+      name: "preview-pr-{{ .number }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io # delete the app's resources when the PR closes
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/elyesmanai911/preflight.git
+        targetRevision: "{{ .head_sha }}"
+        path: charts/preflight-app
+        helm:
+          releaseName: preflight-app
+          valuesObject:
+            image:
+              tag: "{{ .head_sha }}" # CI pushes this tag
+            host: "pr-{{ .number }}.preview.127.0.0.1.nip.io"
+            manageNamespace: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "pr-{{ .number }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
