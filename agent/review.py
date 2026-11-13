@@ -13,6 +13,8 @@ LLM settings (any OpenAI-compatible endpoint):
 import argparse
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -92,9 +94,19 @@ def ask_llm(prompt: str) -> dict:
             "Authorization": f"Bearer {os.environ.get('LLM_API_KEY', '')}",
         },
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        content = json.load(response)["choices"][0]["message"]["content"]
-    return parse_json_reply(content)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                content = json.load(response)["choices"][0]["message"]["content"]
+            return parse_json_reply(content)
+        except urllib.error.HTTPError as error:
+            body = error.read().decode(errors="replace")[:300]
+            if (
+                error.code in (429, 503) and attempt < 2
+            ):  # rate limited / overloaded: wait, retry
+                time.sleep(10 * (attempt + 1))
+                continue
+            raise RuntimeError(f"HTTP {error.code}: {body}") from error
 
 
 def parse_json_reply(content: str) -> dict:
