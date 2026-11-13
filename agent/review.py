@@ -91,6 +91,9 @@ def ask_llm(prompt: str) -> dict:
                 "model": os.environ["LLM_MODEL"],
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2,
+                "response_format": {
+                    "type": "json_object"
+                },  # JSON mode: the reply must parse
             }
         ).encode(),
         headers={
