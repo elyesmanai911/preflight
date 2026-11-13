@@ -5,22 +5,25 @@
 **Preview environments for every pull request, plus an AI release agent that explains them.**
 
 Preflight is a GitOps platform where every pull request automatically gets an ephemeral
-Kubernetes environment. An AI release agent then posts one PR comment that risk-scores the
-diff, summarizes security scan findings, triages failed deployments from live logs, and
-estimates the environment's cost. When the PR closes, the environment is torn down.
+Kubernetes environment serving that PR's version of an ML model. An AI release agent then posts
+one PR comment that risk-scores the diff, compares model metrics against `main`, summarizes
+security scan findings, triages failed deployments from live logs, and estimates the
+environment's cost. When the PR closes, the environment is torn down.
 
-> 🚧 **Status: Phase 2 of 6.** Every PR now gets its own preview environment; the platform is being
+> 🚧 **Status: Phase 3 of 7.** Every PR gets its own preview environment serving its own model; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
 ## How it will work
 
 1. A developer opens a PR on the demo app.
-2. **CI** (GitHub Actions): lint → test → build image → Trivy scan → push to GHCR.
+2. **CI** (GitHub Actions): lint → test → train model + quality gate → build image → Trivy scan → push to GHCR.
 3. **GitOps** (Argo CD ApplicationSet, Pull Request generator): deploys the image into an
    isolated namespace `pr-<number>` with its own URL.
-4. **AI release agent** (Python + Claude API) posts a single PR comment:
+4. **AI release agent** (Python, any OpenAI-compatible LLM: a free API tier in CI, Ollama
+   self-hosted locally) posts a single PR comment:
    - 🔗 preview URL and deploy status
    - 🧠 diff risk summary: what changed, blast radius, what to test
+   - 📈 model report: precision / recall / F1 vs `main`
    - 🛡️ security digest: Trivy CVEs as "fix now / can wait"
    - 🔥 failure triage, if the deploy fails: root cause from pod events and Loki logs
    - 💰 cost estimate for the preview environment
@@ -30,28 +33,41 @@ estimates the environment's cost. When the PR closes, the environment is torn do
 
 ```mermaid
 flowchart TD
-    PR[GitHub pull request] --> CI[GitHub Actions<br/>test · build · Trivy · push to GHCR]
+    PR[GitHub pull request] --> CI[GitHub Actions<br/>test · train + gate · build · Trivy · push to GHCR]
     CI --> ARGO[Argo CD ApplicationSet<br/>PR generator]
     GITOPS[(GitOps repo<br/>Helm chart)] --> ARGO
     ARGO --> K8S[k3d locally / k3s on Azure VM<br/>namespace pr-N]
-    K8S --> APP[Demo invoice API]
+    K8S --> APP[Invoice API +<br/>anomaly model]
     K8S --> OBS[Prometheus + Loki + Grafana]
-    AGENT[Preflight agent<br/>Python + Claude API] -->|reads diff, Trivy JSON,<br/>events, logs| OBS
+    AGENT[Preflight agent<br/>Python + LLM API / Ollama] -->|reads diff, Trivy JSON,<br/>events, logs| OBS
     AGENT -->|one structured comment| PR
 ```
 
 ## The demo app
 
-A small **invoice API** (FastAPI). It echoes real e-invoicing integration work: validation
-and VAT totals now; signing, QR codes and Postgres in later phases. It also gives the AI agent
-realistic failures to diagnose, such as a missing certificate, a failed validation, or a broken
-DB migration.
+A small **invoice API** (FastAPI) with an **anomaly-detection model** (scikit-learn). It echoes
+real e-invoicing integration work and gives the platform a real model lifecycle to ship.
 
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | liveness check |
-| `POST /invoices` | validate an invoice, compute totals (TND, 3 decimals) |
+| `POST /invoices` | validate an invoice, compute totals (TND, 3 decimals), score it: `anomaly_score`, `flagged` |
 | `GET /invoices/{id}` | fetch a stored invoice |
+
+### The model lifecycle
+
+| Step | Where |
+|---|---|
+| **Data:** seeded synthetic invoices with labelled anomalies (invalid VAT rate, inflated price or quantity) | `ml/data.py` |
+| **Features:** one function shared by training and the API, so they can't drift apart | `ml/features.py` |
+| **Train + evaluate:** RandomForest → `model.joblib` + `metrics.json` (precision, recall, F1) | `ml/train.py` |
+| **Quality gate:** F1 below 0.80 fails CI and the image build | `ml/train.py`, CI, Dockerfile |
+| **Version:** the model is trained inside the image build, so image tag = commit SHA = model version | `Dockerfile` |
+| **Deploy per PR:** each preview environment serves that PR's model | ApplicationSet |
+
+```bash
+.venv/bin/python -m ml.train   # writes model/model.joblib and model/metrics.json
+```
 
 ### Run it locally
 
@@ -98,13 +114,15 @@ http://localhost:8081 as `admin` with the password from
 - [x] **Phase 0: skeleton and story.** README, demo app, Dockerfile, tests (`v0.1`)
 - [x] **Phase 1: CI pipeline.** GitHub Actions, GHCR, Trivy with SARIF, branch protection (`v0.2`)
 - [x] **Phase 2: preview environments.** k3d, Argo CD ApplicationSet PR generator, Helm, per-PR ingress (`v0.3`)
-- [ ] **Phase 3: AI agent v1.** diff risk summary and CVE digest as a PR comment (`v0.4`)
-- [ ] **Phase 4: AI incident triage.** Prometheus, Loki, root-cause comments on broken PRs (`v0.5`)
-- [ ] **Phase 5: FinOps and guardrails.** cost estimate, ResourceQuota, TTL reaper (`v0.6`)
-- [ ] **Phase 6: cloud demo.** Terraform on Azure, Key Vault with External Secrets, demo video (`v1.0`)
+- [x] **Phase 3: model lifecycle.** synthetic data, training, quality gate, model versioned per image and per PR (`v0.4`)
+- [ ] **Phase 4: AI agent v1.** diff risk, CVE digest, model report; free LLM API in CI, Ollama locally (`v0.5`)
+- [ ] **Phase 5: AI incident triage + monitoring.** Prometheus, Loki, prediction metrics, root-cause comments on broken PRs (`v0.6`)
+- [ ] **Phase 6: FinOps and guardrails.** cost estimate, ResourceQuota, TTL reaper (`v0.7`)
+- [ ] **Phase 7: cloud demo.** Terraform on Azure, Key Vault with External Secrets, demo video (`v1.0`)
 
 ### Out of scope (on purpose)
 
-Multi-cluster or service mesh, self-hosted or fine-tuned LLMs, a custom dashboard (the PR
-comment *is* the UI), supporting arbitrary apps, and a Go operator. These are possible v2
+Multi-cluster or service mesh; fine-tuned LLMs or GPU serving (Ollama is a local CPU option
+only); MLOps heavyweights such as MLflow, Kubeflow, KServe or feature stores; a custom dashboard
+(the PR comment *is* the UI); supporting arbitrary apps; and a Go operator. These are possible v2
 directions, not v1 work.

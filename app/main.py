@@ -1,11 +1,20 @@
+import os
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import joblib
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from ml.features import invoice_features
+
 app = FastAPI(title="Preflight demo: invoice API")
+
+# Loaded once at startup. A missing model file crashes the app on purpose: better a failed
+# deploy than an API that silently skips anomaly scoring.
+MODEL = joblib.load(os.environ.get("MODEL_PATH", "model/model.joblib"))
+FLAG_THRESHOLD = 0.5
 
 # In-memory store for Phase 0; Postgres arrives in a later phase.
 INVOICES: dict[str, dict] = {}
@@ -29,6 +38,8 @@ class InvoiceOut(InvoiceIn):
     total_excl_vat: Decimal
     total_vat: Decimal
     total_incl_vat: Decimal
+    anomaly_score: float
+    flagged: bool
 
 
 @app.get("/health")
@@ -44,11 +55,15 @@ def create_invoice(invoice: InvoiceIn):
         Decimal(0),
     )
     cent = Decimal("0.001")  # TND has 3 decimals
+    features = invoice_features([line.model_dump() for line in invoice.lines])
+    score = float(MODEL.predict_proba([features])[0][1])
     out = InvoiceOut(
         id=str(uuid4()),
         total_excl_vat=excl.quantize(cent),
         total_vat=vat.quantize(cent),
         total_incl_vat=(excl + vat).quantize(cent),
+        anomaly_score=round(score, 4),
+        flagged=score >= FLAG_THRESHOLD,
         **invoice.model_dump(),
     )
     INVOICES[out.id] = out.model_dump()

@@ -37,10 +37,19 @@ def test_create_and_fetch_invoice():
     assert body["total_excl_vat"] == "250.500"
     assert body["total_vat"] == "41.535"  # 200*0.19 + 50.5*0.07
     assert body["total_incl_vat"] == "292.035"
+    assert body["flagged"] is False
 
     r = client.get(f"/invoices/{body['id']}")
     assert r.status_code == 200
     assert r.json()["id"] == body["id"]
+
+
+def test_flags_invoice_with_nonexistent_vat_rate():
+    bad_line = {**INVOICE["lines"][0], "vat_rate": "0.18"}  # 18% is not a Tunisian rate
+    r = client.post("/invoices", json={**INVOICE, "lines": [bad_line]})
+    assert r.status_code == 201
+    assert r.json()["flagged"] is True
+    assert r.json()["anomaly_score"] >= 0.5
 
 
 def test_rejects_invoice_without_lines():
