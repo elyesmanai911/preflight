@@ -5,11 +5,21 @@ from uuid import uuid4
 
 import joblib
 from fastapi import FastAPI, HTTPException
+from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 
 from ml.features import invoice_features
 
 app = FastAPI(title="Preflight demo: invoice API")
+app.mount("/metrics", make_asgi_app())
+
+# The flag rate (flagged / total) is a simple drift signal: if it moves, the data or model did.
+INVOICES_SCORED = Counter(
+    "preflight_invoices_scored_total", "Invoices scored by the model", ["flagged"]
+)
+SCORING_SECONDS = Histogram(
+    "preflight_scoring_seconds", "Time spent scoring one invoice"
+)
 
 # Loaded once at startup. A missing model file crashes the app on purpose: better a failed
 # deploy than an API that silently skips anomaly scoring.
@@ -55,8 +65,10 @@ def create_invoice(invoice: InvoiceIn):
         Decimal(0),
     )
     cent = Decimal("0.001")  # TND has 3 decimals
-    features = invoice_features([line.model_dump() for line in invoice.lines])
-    score = float(MODEL.predict_proba([features])[0][1])
+    with SCORING_SECONDS.time():
+        features = invoice_features([line.model_dump() for line in invoice.lines])
+        score = float(MODEL.predict_proba([features])[0][1])
+    INVOICES_SCORED.labels(flagged=str(score >= FLAG_THRESHOLD).lower()).inc()
     out = InvoiceOut(
         id=str(uuid4()),
         total_excl_vat=excl.quantize(cent),

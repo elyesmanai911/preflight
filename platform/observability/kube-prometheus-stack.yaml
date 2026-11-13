@@ -1,0 +1,57 @@
+# Prometheus + Grafana, managed by Argo CD (the platform manages itself).
+# Apply: kubectl apply -f platform/observability/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 92.16.0
+    helm:
+      valuesObject:
+        # Sized for a 2-CPU / 6 GB VM: no Alertmanager, no node exporter, no default alert rules.
+        alertmanager:
+          enabled: false
+        nodeExporter:
+          enabled: false
+        defaultRules:
+          create: false
+        # k3s doesn't expose these components; skip the scrapes instead of failing them.
+        kubeEtcd:
+          enabled: false
+        kubeControllerManager:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeProxy:
+          enabled: false
+        prometheus:
+          prometheusSpec:
+            retention: 1d
+            # Pick up ServiceMonitors from every namespace (the preview apps), not only this release's.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            resources:
+              requests:
+                memory: 256Mi
+              limits:
+                memory: 768Mi
+        grafana:
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.monitoring.svc:3100
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # the operator's CRDs are too large for client-side apply

@@ -148,7 +148,16 @@ helm upgrade --install argocd argo/argo-cd --version 10.11.6 \
 
 # 3. One preview environment per open PR
 kubectl apply -f platform/argocd/preview-appset.yaml
+
+# 4. Observability: Prometheus, Grafana, Loki, Alloy (installed and kept in sync by Argo CD)
+kubectl apply -f platform/observability/
 ```
+
+Grafana: `kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80`, then
+http://localhost:3000 as `admin` with the password from
+`kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`.
+Preview apps expose `/metrics/` (invoices scored, flag rate, scoring latency); their logs are in
+Loki under `{namespace="pr-<N>"}`.
 
 Open a PR: within about 2 minutes, Argo CD deploys it to namespace `pr-<N>` and CI comments the
 URL, `http://pr-<N>.preview.127.0.0.1.nip.io:8080`. Close the PR and the namespace is deleted.
