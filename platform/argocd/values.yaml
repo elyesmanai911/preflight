@@ -1,0 +1,9 @@
+# Argo CD for the local k3d cluster.
+# Install: helm upgrade --install argocd argo/argo-cd --version 10.11.6 -n argocd --create-namespace -f platform/argocd/values.yaml
+dex:
+  enabled: false # no SSO locally; log in as admin
+notifications:
+  enabled: false # PR comments are posted by CI, not Argo CD
+configs:
+  params:
+    server.insecure: true # TLS is out of scope for the local cluster; reach the UI via port-forward
