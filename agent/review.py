@@ -8,6 +8,7 @@ LLM settings (any OpenAI-compatible endpoint):
   LLM_BASE_URL  e.g. https://generativelanguage.googleapis.com/v1beta/openai  or  http://localhost:11434/v1
   LLM_MODEL     e.g. gemini-flash-latest  or  qwen2.5:3b
   LLM_API_KEY   empty for Ollama
+  LLM_TIMEOUT   seconds per request (default 180; CPU-only Ollama needs more)
 """
 
 import argparse
@@ -22,14 +23,8 @@ MAX_DIFF_CHARS = 12_000  # keeps prompts well inside free-tier token limits
 MAX_CVES = 25
 SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
+# Instructions go LAST: if a provider truncates a long prompt, it cuts the start, not the task.
 PROMPT = """You review a pull request for an invoice API with an anomaly-detection model.
-Reply with ONLY a JSON object, no markdown fences, with these keys:
-  "risk_level": "low" | "medium" | "high",
-  "summary": 2-3 sentences: what changed and its blast radius,
-  "what_to_test": list of up to 4 short manual checks,
-  "fix_now": list of CVE ids from the list below worth fixing before merge (empty if none),
-  "cve_note": one sentence on the remaining CVEs,
-  "model_note": one sentence on what the metric change means (or that the model is unchanged).
 
 ## Diff
 {diff}
@@ -39,6 +34,15 @@ Reply with ONLY a JSON object, no markdown fences, with these keys:
 
 ## HIGH/CRITICAL vulnerabilities in the image
 {cves}
+
+## Your task
+Review the pull request above. Reply with ONLY a JSON object, no markdown fences, with these keys:
+  "risk_level": "low" | "medium" | "high",
+  "summary": 2-3 sentences: what changed and its blast radius,
+  "what_to_test": list of up to 4 short manual checks,
+  "fix_now": list of CVE ids from the list above worth fixing before merge (empty if none),
+  "cve_note": one sentence on the remaining CVEs,
+  "model_note": one sentence on what the metric change means (or that the model is unchanged).
 """
 
 
@@ -87,6 +91,9 @@ def ask_llm(prompt: str) -> dict:
                 "model": os.environ["LLM_MODEL"],
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2,
+                "response_format": {
+                    "type": "json_object"
+                },  # JSON mode: the reply must parse
             }
         ).encode(),
         headers={
@@ -96,7 +103,8 @@ def ask_llm(prompt: str) -> dict:
     )
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
+            timeout = float(os.environ.get("LLM_TIMEOUT", "180"))
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 content = json.load(response)["choices"][0]["message"]["content"]
             return parse_json_reply(content)
         except urllib.error.HTTPError as error:
@@ -112,6 +120,8 @@ def ask_llm(prompt: str) -> dict:
 def parse_json_reply(content: str) -> dict:
     """Models sometimes wrap JSON in ```json fences or add text around it; take the object."""
     start, end = content.find("{"), content.rfind("}")
+    if start == -1 or end < start:
+        raise ValueError(f"no JSON object in reply: {content[:150]!r}")
     return json.loads(content[start : end + 1])
 
 
