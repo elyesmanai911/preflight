@@ -117,6 +117,8 @@ def ask_llm(prompt: str) -> dict:
 def parse_json_reply(content: str) -> dict:
     """Models sometimes wrap JSON in ```json fences or add text around it; take the object."""
     start, end = content.find("{"), content.rfind("}")
+    if start == -1 or end < start:
+        raise ValueError(f"no JSON object in reply: {content[:150]!r}")
     return json.loads(content[start : end + 1])
 
 
