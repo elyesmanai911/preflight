@@ -15,6 +15,9 @@ spec:
       containers:
         - name: app
           image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          env:
+            - name: MODEL_PATH
+              value: /srv/models/model.joblib
           ports:
             - containerPort: 8000
           readinessProbe:
