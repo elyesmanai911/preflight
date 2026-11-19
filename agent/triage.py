@@ -143,6 +143,19 @@ def pod_problems(pods: dict) -> list[str]:
     return list(dict.fromkeys(problems))  # de-duplicate, keep order
 
 
+def sync_problems(app: dict) -> list[str]:
+    """Manifests the API server rejected never become pods, so read Argo CD's sync result too."""
+    operation = app.get("status", {}).get("operationState", {})
+    if operation.get("phase") not in ("Failed", "Error"):
+        return []
+    failed = [
+        f"Argo CD sync failed for {r['kind']}/{r['name']}: {r.get('message', '')}"
+        for r in operation.get("syncResult", {}).get("resources", [])
+        if r.get("status") == "SyncFailed"
+    ]
+    return failed or [f"Argo CD sync failed: {operation.get('message', '')}"]
+
+
 def pod_summary(pods: dict) -> str:
     rows = []
     for pod in pods.get("items", []):
@@ -229,7 +242,7 @@ def check(app: dict, state: dict) -> dict:
     sha = app["spec"]["source"]["targetRevision"]
     namespace = f"pr-{pr}"
     _, pods = k8s(f"/api/v1/namespaces/{namespace}/pods")
-    signals = pod_problems(pods)
+    signals = sync_problems(app) + pod_problems(pods)
     if (
         not signals
         and app.get("status", {}).get("health", {}).get("status") == "Healthy"
