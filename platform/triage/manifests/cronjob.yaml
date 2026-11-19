@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: preflight-triage
+  namespace: preflight-system
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          serviceAccountName: preflight-triage
+          restartPolicy: Never
+          containers:
+            - name: triage
+              image: ghcr.io/elyesmanai911/preflight-triage:main # built by CI on every push to main
+              imagePullPolicy: Always
+              env:
+                - name: GITHUB_REPO
+                  value: elyesmanai911/preflight
+                - name: LOKI_URL
+                  value: http://loki.monitoring.svc:3100
+                - name: LLM_BASE_URL
+                  value: https://generativelanguage.googleapis.com/v1beta/openai
+                - name: LLM_MODEL
+                  value: gemini-flash-lite-latest
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: github-token
+                      key: token
+                - name: LLM_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: llm-api-key
+                      key: key
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi

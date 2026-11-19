@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: preflight-triage
+  namespace: preflight-system
+---
+# Read-only view of preview environments, plus the service proxy for smoke tests.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: preflight-triage
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get", "create"] # create = POST through the proxy (smoke-test invoice)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: preflight-triage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: preflight-triage
+subjects:
+  - kind: ServiceAccount
+    name: preflight-triage
+    namespace: preflight-system
+---
+# Its own memory: which commits were already seen or reported.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: preflight-triage-state
+  namespace: preflight-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["preflight-triage-state"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: preflight-triage-state
+  namespace: preflight-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: preflight-triage-state
+subjects:
+  - kind: ServiceAccount
+    name: preflight-triage
+    namespace: preflight-system

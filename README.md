@@ -133,6 +133,37 @@ LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5:3b LLM_TIMEOUT=900 \
 The small local model proves the agent runs fully self-hosted, but it isn't a reliable reviewer.
 That's why the numbers in the comment never come from the LLM.
 
+## Incident triage
+
+GitHub's runners can't reach a private cluster, and a self-hosted runner on a public repo would
+let any PR run code on it. So triage runs **inside the cluster** and calls out to GitHub, the
+same pull model Argo CD uses.
+
+`agent/triage.py` runs as a CronJob every 2 minutes (`platform/triage/`). For each preview app:
+
+1. **Detect** in code: `CrashLoopBackOff`, `ImagePullBackOff`, `OOMKilled`, unschedulable pods;
+   if the pods look fine, a **smoke test** (`/health` + one real invoice) through the API server's
+   service proxy.
+2. **Debounce:** report only if the same commit fails on two consecutive runs (no false alarm while
+   CI is still pushing the image), and only once per commit. State lives in a ConfigMap.
+3. **Collect evidence:** pod status, warning events, last log lines from **Loki**.
+4. **Diagnose:** LLM → root cause, fix, confidence (JSON mode). If the LLM fails, the comment
+   still posts with the signals and evidence.
+5. **Comment** on the PR: `🔥 Preflight triage`.
+
+It runs as its own service account with read-only RBAC (apps, pods, events) plus the service proxy
+and its own ConfigMap. Its image is stdlib-only Python, built by CI on every push to `main`.
+
+Setup (secrets are created by hand, never committed):
+
+```bash
+kubectl create namespace preflight-system
+# Fine-grained GitHub token: this repo only, "Pull requests: read and write"
+kubectl -n preflight-system create secret generic github-token --from-literal=token="$(read -rsp 'GitHub token: ' t; echo "$t")"
+kubectl -n preflight-system create secret generic llm-api-key --from-literal=key="$(read -rsp 'LLM API key: ' k; echo "$k")"
+kubectl apply -f platform/triage/app.yaml
+```
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.
