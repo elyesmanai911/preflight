@@ -13,6 +13,10 @@ spec:
         github:
           owner: elyesmanai911
           repo: preflight
+          # Only labelled PRs get a preview. CI adds the label on every push; the triage watcher
+          # removes it after 48 h without a commit (activity-based TTL).
+          labels:
+            - preview
         # No token: the public API allows 60 requests/hour, so poll every 2 minutes.
         requeueAfterSeconds: 120
   template:

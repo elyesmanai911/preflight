@@ -149,3 +149,11 @@ def test_sync_failure_is_a_signal():
         triage.sync_problems({"status": {"operationState": {"phase": "Succeeded"}}})
         == []
     )
+
+
+def test_is_stale_after_ttl():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc)
+    assert triage.is_stale("2026-11-19T11:00:00Z", now, ttl_hours=48)  # 49 h ago
+    assert not triage.is_stale("2026-11-19T13:00:00Z", now, ttl_hours=48)  # 47 h ago

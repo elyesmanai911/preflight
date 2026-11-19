@@ -14,11 +14,16 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agent.review import ask_llm
 
 SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+PREVIEW_LABEL = (
+    "preview"  # the ApplicationSet only builds previews for PRs with this label
+)
+TTL_HOURS = float(os.environ.get("TTL_HOURS", "48"))
 STATE = (
     "preflight-system",
     "preflight-triage-state",
@@ -104,16 +109,49 @@ def loki_logs(namespace: str, limit: int = 40) -> list[str]:
     return [line.rstrip() for _, line in sorted(lines)][-limit:]
 
 
-def post_comment(pr: int, body: str) -> None:
+def github(path: str, method: str = "GET", body=None):
     headers = {
         "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
         "Accept": "application/vnd.github+json",
         "Content-Type": "application/json",
     }
-    url = (
-        f"https://api.github.com/repos/{os.environ['GITHUB_REPO']}/issues/{pr}/comments"
+    url = f"https://api.github.com/repos/{os.environ['GITHUB_REPO']}{path}"
+    return http(url, method, body, headers)
+
+
+def post_comment(pr: int, body: str) -> None:
+    github(f"/issues/{pr}/comments", "POST", {"body": body})
+
+
+def is_stale(commit_date: str, now: datetime, ttl_hours: float) -> bool:
+    committed = datetime.fromisoformat(commit_date.replace("Z", "+00:00"))
+    return (now - committed).total_seconds() > ttl_hours * 3600
+
+
+def pause_if_stale(app: dict) -> bool:
+    """Activity-based TTL: no new commit for TTL_HOURS -> remove the label, so the preview goes away.
+
+    CI re-adds the label on the next push, which brings the preview back.
+    """
+    pr = int(app["metadata"]["name"].removeprefix("preview-pr-"))
+    _, pull = github(f"/pulls/{pr}")
+    if PREVIEW_LABEL not in [label["name"] for label in pull["labels"]]:
+        return (
+            False  # already paused; the preview disappears on the next generator poll
+        )
+    _, commit = github(f"/commits/{app['spec']['source']['targetRevision']}")
+    if not is_stale(
+        commit["commit"]["committer"]["date"], datetime.now(timezone.utc), TTL_HOURS
+    ):
+        return False
+    github(f"/issues/{pr}/labels/{PREVIEW_LABEL}", "DELETE")
+    post_comment(
+        pr,
+        f"⏸️ **Preview `pr-{pr}` paused** after {TTL_HOURS:g} h without a new commit, to free"
+        f" cluster resources. Push a commit (or add the `{PREVIEW_LABEL}` label) to bring it back.\n",
     )
-    http(url, "POST", {"body": body}, headers)
+    print(f"pr-{pr}: paused (no commit for {TTL_HOURS:g} h)")
+    return True
 
 
 # ---------- Detection and evidence (pure functions, unit-tested) ----------
@@ -294,6 +332,8 @@ def main() -> None:
     patch = {}
     for app in previews:
         try:
+            if pause_if_stale(app):
+                continue
             patch.update(check(app, state))
         except Exception as error:  # one broken preview must not stop the others
             print(
