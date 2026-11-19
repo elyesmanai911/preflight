@@ -116,3 +116,36 @@ def test_render_with_and_without_ai():
         "AI diagnosis unavailable (TimeoutError)" in fallback
         and "- p: CrashLoopBackOff" in fallback
     )
+
+
+def test_sync_failure_is_a_signal():
+    app = {
+        "status": {
+            "operationState": {
+                "phase": "Failed",
+                "message": "one or more tasks failed",
+                "syncResult": {
+                    "resources": [
+                        {
+                            "kind": "Service",
+                            "name": "preflight-app",
+                            "status": "Synced",
+                        },
+                        {
+                            "kind": "Deployment",
+                            "name": "preflight-app",
+                            "status": "SyncFailed",
+                            "message": "requests: must be less than or equal to memory limit",
+                        },
+                    ]
+                },
+            }
+        }
+    }
+    assert triage.sync_problems(app) == [
+        "Argo CD sync failed for Deployment/preflight-app: requests: must be less than or equal to memory limit"
+    ]
+    assert (
+        triage.sync_problems({"status": {"operationState": {"phase": "Succeeded"}}})
+        == []
+    )
