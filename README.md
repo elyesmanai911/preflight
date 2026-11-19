@@ -10,6 +10,11 @@ one PR comment that risk-scores the diff, compares model metrics against `main`,
 security scan findings, triages failed deployments from live logs, and estimates the
 environment's cost. When the PR closes, the environment is torn down.
 
+![A broken PR gets an AI root-cause comment](docs/demo-triage.gif)
+
+*Demo PR [#11](https://github.com/elyesmanai911/preflight/pull/11) points `MODEL_PATH` at a missing file. The preview crashes,
+and the in-cluster triage agent posts the root cause and fix from the pod's logs.*
+
 > 🚧 **Status: Phase 5 of 7.** Every PR gets a preview environment serving its own model, an AI-written report, and an AI diagnosis when the deploy breaks; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
