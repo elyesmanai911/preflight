@@ -10,7 +10,7 @@ one PR comment that risk-scores the diff, compares model metrics against `main`,
 security scan findings, triages failed deployments from live logs, and estimates the
 environment's cost. When the PR closes, the environment is torn down.
 
-> 🚧 **Status: Phase 4 of 7.** Every PR gets a preview environment serving its own model, and an AI-written report; the platform is being
+> 🚧 **Status: Phase 5 of 7.** Every PR gets a preview environment serving its own model, an AI-written report, and an AI diagnosis when the deploy breaks; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
 ## How it will work
@@ -164,6 +164,22 @@ kubectl -n preflight-system create secret generic llm-api-key --from-literal=key
 kubectl apply -f platform/triage/app.yaml
 ```
 
+### Demo: five broken pull requests
+
+Each draft PR below breaks the preview in a different way (never merged). The 🔥 comment on each
+one is the watcher's real output.
+
+| PR | Change | What Kubernetes saw | Diagnosis |
+|---|---|---|---|
+| [#11](https://github.com/elyesmanai911/preflight/pull/11) | `MODEL_PATH` points to a missing file | `CrashLoopBackOff` | ✅ found `/srv/models/model.joblib` in the stack trace, blamed `MODEL_PATH` |
+| [#12](https://github.com/elyesmanai911/preflight/pull/12) | memory limit 32Mi < request 64Mi | Deployment rejected, **no pods** | ❌ first: guessed "image pull" (it only had a 503). ✅ after [#15](https://github.com/elyesmanai911/preflight/pull/15) read Argo CD's sync error: "request exceeds limit" |
+| [#13](https://github.com/elyesmanai911/preflight/pull/13) | Dockerfile skips model training | `CrashLoopBackOff` | ✅ "model file isn't in the image" |
+| [#14](https://github.com/elyesmanai911/preflight/pull/14) | 10 trees of depth 2 | **quality gate failed** (F1 0.7807 < 0.80), no image → `ImagePullBackOff` | ✅ "image never published, check the quality gate" |
+| [#16](https://github.com/elyesmanai911/preflight/pull/16) | memory request and limit 32Mi | `OOMKilled` (exit 137) | ✅ "raise the memory limit", ⚠️ but also blamed CI for a stale `ErrImagePull` event from before the image existed |
+
+**Lessons:** the fix for #12's made-up diagnosis was better evidence, not a better model. Known
+limitation (#16): warning events from before the current pod started still reach the LLM.
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.
@@ -204,7 +220,7 @@ http://localhost:8081 as `admin` with the password from
 - [x] **Phase 2: preview environments.** k3d, Argo CD ApplicationSet PR generator, Helm, per-PR ingress (`v0.3`)
 - [x] **Phase 3: model lifecycle.** synthetic data, training, quality gate, model versioned per image and per PR (`v0.4`)
 - [x] **Phase 4: AI agent v1.** diff risk, CVE digest, model report; free LLM API in CI, Ollama locally (`v0.5`)
-- [ ] **Phase 5: AI incident triage + monitoring.** Prometheus, Loki, prediction metrics, root-cause comments on broken PRs (`v0.6`)
+- [x] **Phase 5: AI incident triage + monitoring.** Prometheus, Loki, prediction metrics, root-cause comments on broken PRs (`v0.6`)
 - [ ] **Phase 6: FinOps and guardrails.** cost estimate, ResourceQuota, TTL reaper (`v0.7`)
 - [ ] **Phase 7: cloud demo.** Terraform on Azure, Key Vault with External Secrets, demo video (`v1.0`)
 
