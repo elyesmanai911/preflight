@@ -10,7 +10,7 @@ resources:
     cpu: 50m
     memory: 64Mi
   limits:
-    memory: 128Mi
+    memory: 32Mi
 
 # true for preview environments: the chart creates (and on deletion removes) its namespace
 manageNamespace: false
