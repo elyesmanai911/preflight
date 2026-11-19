@@ -15,7 +15,7 @@ environment's cost. When the PR closes, the environment is torn down.
 *Demo PR [#11](https://github.com/elyesmanai911/preflight/pull/11) points `MODEL_PATH` at a missing file. The preview crashes,
 and the in-cluster triage agent posts the root cause and fix from the pod's logs.*
 
-> 🚧 **Status: Phase 5 of 7.** Every PR gets a preview environment serving its own model, an AI-written report, and an AI diagnosis when the deploy breaks; the platform is being
+> 🚧 **Status: Phase 6 of 7.** Every PR gets a preview environment serving its own model, an AI-written report, and an AI diagnosis when the deploy breaks; the platform is being
 > built phase by phase. Each phase ends with a tagged release; see the roadmap below.
 
 ## How it will work
@@ -194,6 +194,11 @@ limitation (#16): warning events from before the current pod started still reach
   (2 vCPU, 4 GiB, ~$0.0416/h list price), whichever of CPU or memory is larger, over a 48 h TTL.
   Today: 50m CPU / 64Mi = 2.5% of a node ≈ **$0.05 per preview**. It's deliberately simple and
   visible; OpenCost or Kubecost would be the production path.
+- **Activity-based TTL:** only PRs labelled `preview` get an environment. CI adds the label on
+  every push; the watcher removes it after **48 h without a new commit** and comments
+  "⏸️ preview paused", and the ApplicationSet then deletes the environment. The next push brings
+  it back. (Deleting stale namespaces directly wouldn't work: the ApplicationSet would recreate
+  them for any open PR.)
 
 ## Run the platform locally
 
@@ -236,7 +241,7 @@ http://localhost:8081 as `admin` with the password from
 - [x] **Phase 3: model lifecycle.** synthetic data, training, quality gate, model versioned per image and per PR (`v0.4`)
 - [x] **Phase 4: AI agent v1.** diff risk, CVE digest, model report; free LLM API in CI, Ollama locally (`v0.5`)
 - [x] **Phase 5: AI incident triage + monitoring.** Prometheus, Loki, prediction metrics, root-cause comments on broken PRs (`v0.6`)
-- [ ] **Phase 6: FinOps and guardrails.** cost estimate, ResourceQuota, TTL reaper (`v0.7`)
+- [x] **Phase 6: FinOps and guardrails.** cost estimate, ResourceQuota + LimitRange, activity-based 48 h TTL (`v0.7`)
 - [ ] **Phase 7: cloud demo.** Terraform on Azure, Key Vault with External Secrets, demo video (`v1.0`)
 
 ### Out of scope (on purpose)

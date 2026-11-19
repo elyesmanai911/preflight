@@ -39,6 +39,20 @@ jobs:
           name: model-metrics
           path: model/metrics.json
 
+  label-preview:
+    # Every push to a PR (re)starts its preview's 48 h TTL by adding the `preview` label.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Add the preview label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" \
+            -f "labels[]=preview" --silent
+
   triage-image:
     # The in-cluster triage watcher; the CronJob runs the :main tag.
     if: github.event_name == 'push'
