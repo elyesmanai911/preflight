@@ -1,0 +1,29 @@
+{{- if .Values.manageNamespace }}
+# Guardrails for a preview namespace: one PR can never take over the node.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: preview-quota
+spec:
+  hard:
+    pods: "5"
+    requests.cpu: 500m
+    requests.memory: 512Mi
+    limits.memory: 1Gi
+---
+# Defaults for containers that don't set resources, and a per-container ceiling.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: preview-limits
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        memory: 256Mi
+      max:
+        memory: 512Mi
+{{- end }}

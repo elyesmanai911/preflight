@@ -94,3 +94,11 @@ def test_comment_still_posts_when_llm_fails(tmp_path, monkeypatch, capsys):
     out = run_main(tmp_path, monkeypatch, capsys)
     assert "AI review unavailable (TimeoutError: rate limited)" in out
     assert "-0.0770 ⚠️" in out and "critical: 1" in out
+
+
+def test_cost_line_uses_the_larger_share_of_the_node():
+    # 50m of 2 cores = 2.5% beats 64Mi of 4 GiB = 1.6%, so CPU sets the share.
+    line = review.cost_line("50m", "64Mi")
+    assert "2.5% of a B2s node" in line
+    assert "≈ $0.0010/hour" in line and "≈ $0.05 over its 48 h TTL" in line
+    assert "50.0% of a B2s node" in review.cost_line("100m", "2Gi")  # memory share wins

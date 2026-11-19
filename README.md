@@ -185,6 +185,16 @@ one is the watcher's real output.
 **Lessons:** the fix for #12's made-up diagnosis was better evidence, not a better model. Known
 limitation (#16): warning events from before the current pod started still reach the LLM.
 
+## Cost guardrails
+
+- **Quota per preview:** each `pr-<N>` namespace gets a ResourceQuota (5 pods, 500m CPU and
+  512Mi memory requested, 1Gi memory limit) and a LimitRange (default requests, 512Mi max per
+  container), so one PR can never take over the node.
+- **💰 Cost line in every report:** the preview's resource requests as a share of an Azure B2s VM
+  (2 vCPU, 4 GiB, ~$0.0416/h list price), whichever of CPU or memory is larger, over a 48 h TTL.
+  Today: 50m CPU / 64Mi = 2.5% of a node ≈ **$0.05 per preview**. It's deliberately simple and
+  visible; OpenCost or Kubecost would be the production path.
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.

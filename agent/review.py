@@ -23,6 +23,14 @@ MAX_DIFF_CHARS = 12_000  # keeps prompts well inside free-tier token limits
 MAX_CVES = 25
 SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
+# Cost model: the preview's share of one Azure B2s VM (2 vCPU, 4 GiB, ~$0.0416/h pay-as-you-go
+# list price), by whichever of CPU or memory requests is the larger share, for its 48 h TTL.
+# Deliberately simple and visible; OpenCost/Kubecost would be the production path.
+NODE_USD_PER_HOUR = 0.0416
+NODE_CPU = 2.0
+NODE_MEMORY_GIB = 4.0
+TTL_HOURS = 48
+
 # Instructions go LAST: if a provider truncates a long prompt, it cuts the start, not the task.
 PROMPT = """You review a pull request for an invoice API with an anomaly-detection model.
 
@@ -125,6 +133,18 @@ def parse_json_reply(content: str) -> dict:
     return json.loads(content[start : end + 1])
 
 
+def cost_line(cpu: str, memory: str) -> str:
+    cores = float(cpu[:-1]) / 1000 if cpu.endswith("m") else float(cpu)
+    units = {"Ki": 2**-20, "Mi": 2**-10, "Gi": 1}
+    gib = float(memory[:-2]) * units[memory[-2:]]
+    share = max(cores / NODE_CPU, gib / NODE_MEMORY_GIB)
+    hourly = share * NODE_USD_PER_HOUR
+    return (
+        f"💰 **Cost:** ≈ ${hourly:.4f}/hour, ≈ ${hourly * TTL_HOURS:.2f} over its {TTL_HOURS} h TTL"
+        f" (requests {cpu} CPU / {memory} = {share:.1%} of a B2s node at ${NODE_USD_PER_HOUR}/h)"
+    )
+
+
 def render(
     preview_url: str,
     image: str,
@@ -132,12 +152,14 @@ def render(
     counts: dict,
     ai: dict | None,
     ai_error: str,
+    cost: str = "",
 ) -> str:
     risk_icon = {"low": "🟢", "medium": "🟡", "high": "🔴"}
     counts_line = " · ".join(f"{sev.lower()}: {n}" for sev, n in counts.items() if n)
     parts = [
         "## 🛫 Preflight report",
-        f"🔗 **Preview:** {preview_url}  \nImage: `{image}`",
+        f"🔗 **Preview:** {preview_url}  \nImage: `{image}`"
+        + (f"  \n{cost}" if cost else ""),
     ]
     if ai:
         level = str(ai.get("risk_level", "?")).lower()
@@ -170,6 +192,8 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, help="main's metrics.json (optional)")
     parser.add_argument("--preview-url", required=True)
     parser.add_argument("--image", required=True)
+    parser.add_argument("--cpu-request", help="e.g. 50m (adds the cost line)")
+    parser.add_argument("--memory-request", help="e.g. 64Mi")
     args = parser.parse_args()
 
     pr_metrics = json.loads(args.metrics.read_text())
@@ -199,7 +223,12 @@ def main() -> None:
     else:
         ai_error = "LLM_BASE_URL / LLM_MODEL not set"
 
-    print(render(args.preview_url, args.image, table, counts, ai, ai_error))
+    cost = (
+        cost_line(args.cpu_request, args.memory_request)
+        if args.cpu_request and args.memory_request
+        else ""
+    )
+    print(render(args.preview_url, args.image, table, counts, ai, ai_error, cost))
 
 
 if __name__ == "__main__":
