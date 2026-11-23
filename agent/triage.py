@@ -148,7 +148,7 @@ def pause_if_stale(app: dict) -> bool:
     post_comment(
         pr,
         f"⏸️ **Preview `pr-{pr}` paused** after {TTL_HOURS:g} h without a new commit, to free"
-        f" cluster resources. Push a commit (or add the `{PREVIEW_LABEL}` label) to bring it back.\n",
+        f" cluster resources. Push a commit to bring it back.\n",
     )
     print(f"pr-{pr}: paused (no commit for {TTL_HOURS:g} h)")
     return True
