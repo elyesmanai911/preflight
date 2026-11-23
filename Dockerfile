@@ -1,4 +1,6 @@
 FROM python:3.12-slim
+# Picks up the zlib security fix even when the base image lags behind Debian.
+RUN apt-get update && apt-get install -y --only-upgrade zlib1g && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
