@@ -133,6 +133,7 @@ resource "azurerm_linux_virtual_machine" "demo" {
   location              = local.location
   resource_group_name   = local.rg
   size                  = var.vm_size
+  zone                  = var.zone
   admin_username        = "preflight"
   network_interface_ids = [azurerm_network_interface.demo.id]
 
@@ -167,9 +168,10 @@ resource "azurerm_linux_virtual_machine" "demo" {
       file("${path.module}/../../platform/argocd/preview-appset.yaml"),
       "preview.127.0.0.1.nip.io", "preview.${local.domain}"
     )
+    # No Prometheus/Grafana here: with them, this 4 GiB VM stalled on memory and disk I/O.
     platform_apps = join("\n---\n", [
-      for f in concat(tolist(fileset("${path.module}/../../platform/observability", "*.yaml")), ["../triage/app.yaml"]) :
-      file("${path.module}/../../platform/observability/${f}")
+      for f in ["observability/loki.yaml", "observability/alloy.yaml", "triage/app.yaml"] :
+      file("${path.module}/../../platform/${f}")
     ])
   }))
 }
