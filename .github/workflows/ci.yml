@@ -147,10 +147,12 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'gemini-flash-latest' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          # Which cluster serves previews: the local k3d one by default, the Azure demo when set.
+          PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN || 'preview.127.0.0.1.nip.io:8080' }}
         run: |
           python3 -m agent.review --diff pr.diff --trivy trivy.json \
             --metrics pr-metrics/metrics.json --baseline baseline/metrics.json \
-            --preview-url "http://pr-$PR.preview.127.0.0.1.nip.io:8080 (local k3d cluster)" \
+            --preview-url "http://pr-$PR.$PREVIEW_DOMAIN" \
             --image "$IMAGE" \
             --cpu-request "$(yq '.resources.requests.cpu' charts/preflight-app/values.yaml)" \
             --memory-request "$(yq '.resources.requests.memory' charts/preflight-app/values.yaml)" \

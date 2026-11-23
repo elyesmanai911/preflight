@@ -220,6 +220,22 @@ and may not exist yet on a new subscription. The kill switch fires at $5 to leav
 was polling the async delete, and its permission was granted *on the group it was deleting*. Fix:
 `DisableAsyncPattern`, so 202 Accepted counts as success.
 
+## Cloud demo (`infra/demo`)
+
+One B2s VM in the guarded `preflight-demo` group boots into the whole platform by itself:
+cloud-init installs k3s, and k3s's built-in Helm controller and auto-applied manifests install
+Argo CD, the preview ApplicationSet, monitoring and the triage watcher. The repo's own manifests
+are reused as they are; only the preview domain changes to `pr-<N>.preview.<public-ip>.nip.io`.
+
+- **Network:** SSH only from the owner's IP, port 80 for previews, the Kubernetes API closed
+  (`ssh -L 6443:127.0.0.1:6443` tunnel).
+- **Secrets:** Azure Key Vault, read at boot by the VM's managed identity and piped to
+  Kubernetes over stdin, never written to disk or cloud-init. External Secrets Operator is the
+  production path; it was left out to save RAM on a 4 GiB node.
+- **Cost:** ≈ $1.20/day (VM $1.00, public IP $0.12, disk $0.08), nightly auto-shutdown at 23:00,
+  and the guards above delete everything after 72 h at the latest.
+- CI's report links to whichever cluster is live via the `PREVIEW_DOMAIN` repo variable.
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.
