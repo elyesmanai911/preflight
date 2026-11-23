@@ -27,7 +27,7 @@ def train(out_dir: Path, n_train: int = 5000, n_test: int = 1500) -> dict:
     x_test = [invoice_features(lines) for lines, _ in test_rows]
     y_test = [label for _, label in test_rows]
 
-    model = RandomForestClassifier(n_estimators=100, random_state=SEED)
+    model = RandomForestClassifier(n_estimators=10, max_depth=2, random_state=SEED)
     model.fit(x_train, y_train)
     predicted = model.predict(x_test)
 
