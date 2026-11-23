@@ -200,6 +200,26 @@ limitation (#16): warning events from before the current pod started still reach
   it back. (Deleting stale namespaces directly wouldn't work: the ApplicationSet would recreate
   them for any open PR.)
 
+## Cloud demo cost guards (`infra/guard`)
+
+The Azure demo runs on a pay-as-you-go subscription with no Microsoft spending limit, under a
+**hard $10 cap**. Budgets on Azure only *alert*, so the guards do the stopping, and they were
+built and tested before anything billable existed:
+
+| Guard | How | Tested |
+|---|---|---|
+| One blast radius | everything billable lives in the `preflight-demo` resource group | — |
+| ⏱️ Self-destruct | a Logic App runs hourly and deletes `preflight-demo` once it's past its TTL (72 h) | ✅ deleted the group 10 min after creation |
+| 🔴 Kill switch | budget at 50% of $10 → action group → Logic App deletes `preflight-demo` | ✅ deleted the group from a test budget alert |
+| 📧 Alerts | email at $3 and $5 actual, and $8 forecast | — |
+
+The self-destruct is the main guarantee: it doesn't depend on billing data, which lags up to a day
+and may not exist yet on a new subscription. The kill switch fires at $5 to leave margin for that lag.
+
+**Gotcha found while testing:** the delete succeeded, but the Logic App run reported *Forbidden*. It
+was polling the async delete, and its permission was granted *on the group it was deleting*. Fix:
+`DisableAsyncPattern`, so 202 Accepted counts as success.
+
 ## Run the platform locally
 
 Needs Docker, [k3d](https://k3d.io), kubectl and Helm.
