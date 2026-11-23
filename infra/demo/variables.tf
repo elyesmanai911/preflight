@@ -24,6 +24,12 @@ variable "vm_size" {
   default = "Standard_B2s" # 2 vCPU, 4 GiB, ~$0.0416/h in East US
 }
 
+variable "zone" {
+  description = "Availability zone; pin one when the region has no capacity for vm_size."
+  type        = string
+  default     = null
+}
+
 variable "k3s_version" {
   type    = string
   default = "v1.35.5+k3s1" # same as the local k3d cluster
