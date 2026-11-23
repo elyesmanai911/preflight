@@ -10,3 +10,4 @@ model/
 *.tfstate.*
 *.tfvars
 .terraform.tfstate.lock.info
+*.tfplan
