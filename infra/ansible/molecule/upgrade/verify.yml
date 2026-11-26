@@ -1,0 +1,23 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the node's Kubernetes version
+      ansible.builtin.command: >-
+        k3s kubectl get nodes -o jsonpath={.items[*].status.nodeInfo.kubeletVersion}
+      register: upgrade_test_version
+      changed_when: false
+
+    - name: The node was upgraded from v1.34 to the pinned version
+      ansible.builtin.assert:
+        that: upgrade_test_version.stdout == 'v1.35.5+k3s1'
+
+    - name: The guard refuses unsafe versions before changing anything
+      ansible.builtin.include_tasks: tasks/refused.yml
+      loop:
+        - v1.34.13+k3s1 # downgrade
+        - v1.37.0+k3s1 # skips 1.36
+      loop_control:
+        loop_var: upgrade_test_target
