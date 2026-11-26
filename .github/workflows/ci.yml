@@ -39,6 +39,41 @@ jobs:
           name: model-metrics
           path: model/metrics.json
 
+  terraform:
+    # Static checks on the Azure code. Nothing here talks to Azure: no credentials needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: v0.66.0
+
+      - name: Format, validate, lint
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # tflint --init downloads the azurerm ruleset
+        run: |
+          # infra/demo reads the SSH public key at plan time; validate needs a file there.
+          mkdir -p ~/.ssh && ssh-keygen -t ed25519 -N "" -q -f ~/.ssh/preflight_azure
+          tflint --init -c "$PWD/infra/.tflint.hcl"
+          for dir in infra/demo infra/guard; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" fmt -check -diff
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            tflint --chdir="$dir" -c "$PWD/infra/.tflint.hcl" --minimum-failure-severity=warning
+            echo "::endgroup::"
+          done
+
+      - name: Checkov (security misconfigurations)
+        run: |
+          pipx run --spec checkov==3.4.11 checkov -d infra/demo -d infra/guard --framework terraform --compact --quiet
+
   ansible:
     # Lints the VM configuration and tests each role in a throwaway Ubuntu 24.04 container.
     runs-on: ubuntu-latest

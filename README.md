@@ -275,11 +275,16 @@ on each PR with Molecule in a container, so no Azure spend is needed to prove it
 - **Network:** SSH only from the owner's IP, port 80 for previews, the Kubernetes API closed
   (`ssh -L 6443:127.0.0.1:6443` tunnel).
 - **Secrets:** Azure Key Vault, read by the VM's managed identity and piped to Kubernetes
-  over stdin, never written to disk or shown in Ansible's output. External Secrets Operator is the
+  over stdin, never written to disk or shown in Ansible's output. The vault's firewall only
+  admits the VM's subnet (service endpoint) and the owner's IP; secrets expire after 30 days. External Secrets Operator is the
   production path; it was left out to save RAM on a 4 GiB node.
 - **Cost:** ≈ $1.20/day (VM $1.00, public IP $0.12, disk $0.08), nightly auto-shutdown at 23:00,
   and the guards above delete everything after 72 h at the latest.
 - CI's report links to whichever cluster is live via the `PREVIEW_DOMAIN` repo variable.
+- **Checked on every PR**, with no Azure credentials: `terraform fmt` and `validate`, TFLint
+  (with the azurerm ruleset, `infra/.tflint.hcl`) and Checkov. Each Checkov check that is skipped
+  says why, next to the resource (`#checkov:skip=...`): public HTTP for previews, no purge
+  protection on a vault that's destroyed after every demo, no paid private endpoint.
 
 ## Run the platform locally
 

@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "5.13.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "0.14.2" # same as infra/guard
+    }
     local = {
       source  = "hashicorp/local"
       version = "2.6.1"

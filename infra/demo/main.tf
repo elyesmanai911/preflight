@@ -28,9 +28,14 @@ resource "azurerm_subnet" "demo" {
   resource_group_name  = local.rg
   virtual_network_name = azurerm_virtual_network.demo.name
   address_prefixes     = ["10.20.1.0/24"]
+
+  service_endpoint { # lets the Key Vault firewall allow this subnet
+    service = "Microsoft.KeyVault"
+  }
 }
 
 resource "azurerm_network_security_group" "demo" {
+  #checkov:skip=CKV_AZURE_160:previews are public on purpose; HTTP only, no secrets in them
   name                = "preflight-nsg"
   location            = local.location
   resource_group_name = local.rg
@@ -75,6 +80,7 @@ resource "azurerm_public_ip" "demo" {
 }
 
 resource "azurerm_network_interface" "demo" {
+  #checkov:skip=CKV_AZURE_119:the VM serves the previews itself; a load balancer would cost more
   name                = "preflight-nic"
   location            = local.location
   resource_group_name = local.rg
@@ -89,7 +95,13 @@ resource "azurerm_network_interface" "demo" {
 
 # ---------- Secrets: Key Vault, read by the VM's own identity ----------
 
+# Purge protection would block reusing the vault name for days after each destroy; soft delete
+# (7 days) still applies. A private endpoint costs ~$7/month; the firewall below gets most of the
+# benefit for free: only this subnet and the owner's IP can reach the vault.
 resource "azurerm_key_vault" "demo" {
+  #checkov:skip=CKV_AZURE_110:demo vault is destroyed and recreated with the same name
+  #checkov:skip=CKV_AZURE_42:recoverable needs purge protection, see above
+  #checkov:skip=CKV2_AZURE_32:private endpoint is paid; firewall + service endpoint instead
   name                       = local.vault
   location                   = local.location
   resource_group_name        = local.rg
@@ -98,6 +110,18 @@ resource "azurerm_key_vault" "demo" {
   rbac_authorization_enabled = true
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
+
+  network_acls {
+    default_action             = "Deny"
+    bypass                     = "AzureServices"
+    ip_rules                   = [var.ssh_source_ip]      # Terraform writes the secrets from here
+    virtual_network_subnet_ids = [azurerm_subnet.demo.id] # the VM reads them from here
+  }
+}
+
+# Secrets expire after 30 days; the next terraform apply after that sets a new date.
+resource "time_rotating" "secrets" {
+  rotation_days = 30
 }
 
 resource "azurerm_role_assignment" "me_writes_secrets" {
@@ -107,17 +131,21 @@ resource "azurerm_role_assignment" "me_writes_secrets" {
 }
 
 resource "azurerm_key_vault_secret" "github_token" {
-  name         = "github-token"
-  value        = var.github_token
-  key_vault_id = azurerm_key_vault.demo.id
-  depends_on   = [azurerm_role_assignment.me_writes_secrets]
+  name            = "github-token"
+  value           = var.github_token
+  content_type    = "text/plain"
+  expiration_date = time_rotating.secrets.rotation_rfc3339
+  key_vault_id    = azurerm_key_vault.demo.id
+  depends_on      = [azurerm_role_assignment.me_writes_secrets]
 }
 
 resource "azurerm_key_vault_secret" "llm_api_key" {
-  name         = "llm-api-key"
-  value        = var.llm_api_key
-  key_vault_id = azurerm_key_vault.demo.id
-  depends_on   = [azurerm_role_assignment.me_writes_secrets]
+  name            = "llm-api-key"
+  value           = var.llm_api_key
+  content_type    = "text/plain"
+  expiration_date = time_rotating.secrets.rotation_rfc3339
+  key_vault_id    = azurerm_key_vault.demo.id
+  depends_on      = [azurerm_role_assignment.me_writes_secrets]
 }
 
 resource "azurerm_role_assignment" "vm_reads_secrets" {
@@ -136,6 +164,8 @@ resource "azurerm_linux_virtual_machine" "demo" {
   zone                  = var.zone
   admin_username        = "preflight"
   network_interface_ids = [azurerm_network_interface.demo.id]
+
+  allow_extension_operations = false # Ansible configures the VM, no Azure extensions
 
   admin_ssh_key {
     username   = "preflight"
