@@ -43,7 +43,7 @@
       ansible.builtin.command: k3s kubectl wait node --all --for=condition=Ready --timeout=10s
       register: k3s_node_ready
       until: k3s_node_ready.rc == 0
-      retries: 30
+      retries: 60 # first boot can take minutes on a slow or shared machine
       delay: 5
       changed_when: false
   rescue:
