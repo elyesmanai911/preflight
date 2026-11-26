@@ -75,6 +75,7 @@
         # On failure, show why: k3s's service state and errors, then the cluster if it's up.
         - name: Read k3s and cluster state
           ansible.builtin.shell: |
+            set -o pipefail
             systemctl status k3s --no-pager | head -15
             journalctl -u k3s --no-pager | grep -E 'level=(error|fatal)|^.{0,60}E[0-9]{4} |Failed|panic' | tail -60
             k3s kubectl get pods -A -o wide
