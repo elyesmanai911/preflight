@@ -74,6 +74,40 @@ jobs:
         run: |
           pipx run --spec checkov==3.4.11 checkov -d infra/demo -d infra/guard --framework terraform --compact --quiet
 
+  infracost:
+    # Monthly cost of the Azure code, before vs after the PR, posted as a PR comment.
+    # Skips itself until the INFRACOST_API_KEY repo secret exists (free key: infracost.io).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+    steps:
+      - name: No API key yet
+        if: env.INFRACOST_API_KEY == ''
+        run: echo "::notice::INFRACOST_API_KEY is not set; skipping the cost estimate."
+
+      - uses: actions/checkout@v4
+        if: env.INFRACOST_API_KEY != ''
+        with:
+          path: head
+
+      - uses: actions/checkout@v4
+        if: env.INFRACOST_API_KEY != ''
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+
+      - uses: infracost/actions/diff@a5783eb98adc93aa7a0049fce0abb06fdd30770a # v5.0.1
+        if: env.INFRACOST_API_KEY != ''
+        with:
+          api-key: ${{ env.INFRACOST_API_KEY }}
+          version: 2.1.6
+          base-path: base
+          head-path: head
+
   ansible:
     # Lints the VM configuration and tests each role in a throwaway Ubuntu 24.04 container.
     runs-on: ubuntu-latest

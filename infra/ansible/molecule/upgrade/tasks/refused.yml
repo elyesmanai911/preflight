@@ -1,6 +1,12 @@
 ---
 - name: Try k3s {{ upgrade_test_target }}
   block:
+    - name: Heads-up for whoever reads the log
+      ansible.builtin.debug:
+        msg: >-
+          Testing that k3s {{ upgrade_test_target }} is REFUSED. The red "is not allowed" error
+          below is expected; the test result is "Refused for the right reason".
+
     - name: Run the k3s role with {{ upgrade_test_target }}
       ansible.builtin.include_role:
         name: k3s
