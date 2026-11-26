@@ -6,7 +6,7 @@ Terraform (`infra/demo`) creates the VM. Ansible configures it and keeps it conf
 |---|---|
 | `hardening` | SSH: keys only, `preflight` user only, no root. Firewall (ufw): deny inbound except 22 and 80, plus the k3s pod and service networks. Security updates install daily, without automatic reboots. |
 | `k3s` | The pinned k3s release binary, verified against the release's checksum file, and its systemd unit. Waits for the node to be Ready. |
-| `platform` | Argo CD (via k3s's Helm controller), the preview ApplicationSet on the VM's domain, Loki, Alloy and the triage watcher. |
+| `platform` | Argo CD (via k3s's Helm controller), the preview ApplicationSet on the VM's domain, Loki, Alloy, the triage watcher, and Kyverno with the image-signature policy. |
 | `secrets` | Reads the GitHub token and LLM key from Key Vault with the VM's managed identity and stores them as Kubernetes secrets. |
 
 ## Run it on the VM

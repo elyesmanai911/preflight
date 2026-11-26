@@ -1,0 +1,44 @@
+# Only images that CI built, signed and attached an SBOM to may run.
+# CI signs with keyless Cosign: no key to store or leak. The signature proves the image came
+# from this repo's ci.yml workflow, through GitHub's OIDC identity, logged in Sigstore's Rekor.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: verify-preflight-images
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  # Also check Deployments and CronJobs, so a bad image fails the Argo CD sync
+  # instead of silently never getting a pod.
+  autogen:
+    podControllers:
+      controllers: [deployments, cronjobs]
+  matchImageReferences:
+    - glob: ghcr.io/elyesmanai911/preflight-*
+  # Leave tags as they are: rewriting them to digests would make Argo CD see drift forever.
+  validationConfigurations:
+    mutateDigest: false
+    verifyDigest: false
+  attestors:
+    - name: ci
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://token.actions.githubusercontent.com
+              subjectRegExp: ^https://github\.com/elyesmanai911/preflight/\.github/workflows/ci\.yml@refs/.+$
+  attestations:
+    - name: sbom
+      intoto:
+        type: https://spdx.dev/Document
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.ci])).all(e, e > 0)
+      message: image is not signed by this repo's CI
+    - expression: >-
+        images.containers.map(image, verifyAttestationSignatures(image, attestations.sbom, [attestors.ci])).all(e, e > 0)
+      message: image has no SBOM signed by this repo's CI

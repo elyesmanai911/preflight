@@ -50,7 +50,7 @@
               - "'127.0.0.1' not in site_appset.stdout"
 
         - name: Argo CD has the platform apps
-          ansible.builtin.command: k3s kubectl -n argocd get application loki alloy preflight-triage
+          ansible.builtin.command: k3s kubectl -n argocd get application loki alloy preflight-triage kyverno supply-chain-policies
           register: site_apps
           until: site_apps.rc == 0
           retries: 30

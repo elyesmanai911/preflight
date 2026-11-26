@@ -12,3 +12,5 @@ platform_apps:
   - observability/loki.yaml
   - observability/alloy.yaml
   - triage/app.yaml
+  - supply-chain/kyverno.yaml
+  - supply-chain/policies.yaml

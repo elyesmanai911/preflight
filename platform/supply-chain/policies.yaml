@@ -1,0 +1,25 @@
+# The policy itself, kept in sync from this repo. Synced after Kyverno (it needs its CRDs).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: supply-chain-policies
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/elyesmanai911/preflight.git
+    targetRevision: main
+    path: platform/supply-chain/policies
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Kyverno may still be installing its CRDs on the first try.
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

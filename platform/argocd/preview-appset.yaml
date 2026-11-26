@@ -44,3 +44,11 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        # Kyverno refuses the image until CI has signed it, a few minutes after the push.
+        # Keep retrying instead of giving up on that commit.
+        retry:
+          limit: 10
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
