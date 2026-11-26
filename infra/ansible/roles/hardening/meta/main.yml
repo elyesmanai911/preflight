@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: elyesmanai911
+  description: SSH, firewall and automatic security updates for the Preflight VM
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

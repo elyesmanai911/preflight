@@ -1,0 +1,13 @@
+---
+# The only account allowed to SSH in (Terraform creates it as the VM's admin user).
+hardening_ssh_user: preflight
+
+# Inbound TCP ports open to the internet. Azure's NSG narrows SSH to your IP on top of this.
+hardening_open_tcp_ports:
+  - 22 # SSH
+  - 80 # preview environments (Traefik)
+
+# Networks allowed everywhere: k3s pods and services must reach each other and the node.
+hardening_trusted_cidrs:
+  - 10.42.0.0/16 # k3s pods
+  - 10.43.0.0/16 # k3s services

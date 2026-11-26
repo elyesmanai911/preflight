@@ -39,6 +39,34 @@ jobs:
           name: model-metrics
           path: model/metrics.json
 
+  ansible:
+    # Lints the VM configuration and tests each role in a throwaway Ubuntu 24.04 container.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/ansible
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible tools
+        run: |
+          pip install ansible-core==2.22.0 ansible-lint==26.11.1 molecule==26.11.1 "molecule-plugins[docker]==26.11.0"
+          ansible-galaxy collection install -r requirements.yml -p collections
+
+      - name: Lint
+        run: ansible-lint
+
+      - name: Molecule (hardening)
+        working-directory: infra/ansible/roles/hardening
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/infra/ansible/collections
+          PY_COLORS: "1"
+        run: molecule test
+
   label-preview:
     # Every push to a PR (re)starts its preview's 48 h TTL by adding the `preview` label.
     if: github.event_name == 'pull_request'

@@ -1,0 +1,20 @@
+---
+driver:
+  name: docker
+platforms:
+  - name: preflight-vm
+    image: preflight-molecule-ubuntu:24.04
+    dockerfile: Dockerfile
+    pre_build_image: false
+    # systemd and ufw (iptables) need these; the container still has its own network.
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    command: /lib/systemd/systemd
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
+verifier:
+  name: ansible

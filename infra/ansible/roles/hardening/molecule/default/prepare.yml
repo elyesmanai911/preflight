@@ -1,0 +1,16 @@
+---
+# Make the container look like a fresh Azure VM: SSH installed and running.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Install the SSH server
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: true
+
+    - name: Start SSH, as on a booted VM
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: started
