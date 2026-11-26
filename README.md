@@ -222,15 +222,24 @@ was polling the async delete, and its permission was granted *on the group it wa
 
 ## Cloud demo (`infra/demo`)
 
-One B2s VM in the guarded `preflight-demo` group boots into the whole platform by itself:
-cloud-init installs k3s, and k3s's built-in Helm controller and auto-applied manifests install
-Argo CD, the preview ApplicationSet, monitoring and the triage watcher. The repo's own manifests
-are reused as they are; only the preview domain changes to `pr-<N>.preview.<public-ip>.nip.io`.
+One B2s VM in the guarded `preflight-demo` group. **Terraform creates it, Ansible configures it**
+([`infra/ansible`](infra/ansible)): SSH and firewall hardening, automatic security updates, the
+pinned k3s binary, then manifests that k3s's built-in Helm controller applies to install Argo CD,
+the preview ApplicationSet, monitoring and the triage watcher. The repo's own manifests are reused
+as they are; only the preview domain changes to `pr-<N>.preview.<public-ip>.nip.io`.
+
+```bash
+cd infra/demo && terraform apply            # VM, network, Key Vault; writes the Ansible inventory
+cd ../ansible && ansible-playbook -i inventory/demo.yml site.yml
+```
+
+Re-running the playbook is safe at any time: it only changes what drifted. Every role is tested
+on each PR with Molecule in a container, so no Azure spend is needed to prove it works.
 
 - **Network:** SSH only from the owner's IP, port 80 for previews, the Kubernetes API closed
   (`ssh -L 6443:127.0.0.1:6443` tunnel).
-- **Secrets:** Azure Key Vault, read at boot by the VM's managed identity and piped to
-  Kubernetes over stdin, never written to disk or cloud-init. External Secrets Operator is the
+- **Secrets:** Azure Key Vault, read by the VM's managed identity and piped to Kubernetes
+  over stdin, never written to disk or shown in Ansible's output. External Secrets Operator is the
   production path; it was left out to save RAM on a 4 GiB node.
 - **Cost:** ≈ $1.20/day (VM $1.00, public IP $0.12, disk $0.08), nightly auto-shutdown at 23:00,
   and the guards above delete everything after 72 h at the latest.

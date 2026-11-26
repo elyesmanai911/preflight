@@ -1,0 +1,91 @@
+---
+# Checks the platform actually comes up, not only that files were written.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check the platform
+      block:
+        - name: Read the running k3s version
+          ansible.builtin.command: k3s --version
+          register: site_k3s_version
+          changed_when: false
+
+        - name: K3s runs the pinned version
+          ansible.builtin.assert:
+            that: "'v1.35.5+k3s1' in site_k3s_version.stdout"
+
+        - name: The Kubernetes API is up
+          ansible.builtin.command: k3s kubectl get --raw /readyz
+          register: site_api
+          until: site_api.rc == 0
+          retries: 12
+          delay: 5
+          changed_when: false
+
+        - name: Argo CD is installed and its server is available
+          ansible.builtin.command: >-
+            k3s kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=10s
+          register: site_argocd
+          until: site_argocd.rc == 0
+          retries: 60
+          delay: 10
+          changed_when: false
+
+        - name: Read the preview ApplicationSet's domain
+          ansible.builtin.command: >-
+            k3s kubectl -n argocd get applicationset preflight-previews
+            -o jsonpath={.spec.template.spec.source.helm}
+          register: site_appset
+          until: site_appset.rc == 0
+          retries: 30
+          delay: 10
+          changed_when: false
+
+        - name: Previews use this VM's domain
+          ansible.builtin.assert:
+            that:
+              - "'preview.203.0.113.10.nip.io' in site_appset.stdout"
+              - "'127.0.0.1' not in site_appset.stdout"
+
+        - name: Argo CD has the platform apps
+          ansible.builtin.command: k3s kubectl -n argocd get application loki alloy preflight-triage
+          register: site_apps
+          until: site_apps.rc == 0
+          retries: 30
+          delay: 10
+          changed_when: false
+
+        - name: Read the VM's own IP
+          ansible.builtin.command: hostname -I
+          register: site_ip
+          changed_when: false
+
+        - name: Traefik answers on port 80 through the firewall
+          ansible.builtin.uri:
+            url: "http://{{ site_ip.stdout.split()[0] }}/"
+            status_code: 404 # Traefik's answer for a host with no route: it's reachable
+          register: site_http
+          until: site_http.status == 404
+          retries: 30
+          delay: 10
+
+      rescue:
+        # On failure, show why: k3s's service state and errors, then the cluster if it's up.
+        - name: Read k3s and cluster state
+          ansible.builtin.shell: |
+            set -o pipefail
+            systemctl status k3s --no-pager | head -15
+            journalctl -u k3s --no-pager | grep -E 'level=(error|fatal)|^.{0,60}E[0-9]{4} |Failed|panic' | tail -60
+            k3s kubectl get pods -A -o wide
+            k3s kubectl get events -A --sort-by=.lastTimestamp | tail -30
+          args:
+            executable: /bin/bash
+          register: site_state
+          changed_when: false
+          failed_when: false
+
+        - name: Fail with the state
+          ansible.builtin.fail:
+            msg: "{{ site_state.stdout_lines + site_state.stderr_lines }}"

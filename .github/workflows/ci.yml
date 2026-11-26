@@ -67,6 +67,12 @@ jobs:
           PY_COLORS: "1"
         run: molecule test
 
+      - name: Molecule (whole site.yml)
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/infra/ansible/collections
+          PY_COLORS: "1"
+        run: molecule test -s site
+
   label-preview:
     # Every push to a PR (re)starts its preview's 48 h TTL by adding the `preview` label.
     if: github.event_name == 'pull_request'

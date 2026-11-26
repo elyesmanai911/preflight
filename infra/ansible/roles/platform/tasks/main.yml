@@ -1,0 +1,41 @@
+---
+# k3s applies everything in this directory by itself, and retries until the CRDs exist.
+# Its built-in Helm controller installs Argo CD; Argo CD then installs the rest from Git.
+- name: Install Argo CD with k3s's Helm controller
+  ansible.builtin.template:
+    src: argocd-helmchart.yaml.j2
+    dest: /var/lib/rancher/k3s/server/manifests/argocd.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Add the preview ApplicationSet, on this VM's domain
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.file', platform_repo_dir ~ '/argocd/preview-appset.yaml')
+         | replace('preview.127.0.0.1.nip.io', platform_preview_domain) }}
+    dest: /var/lib/rancher/k3s/server/manifests/preview-appset.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Add the platform apps
+  ansible.builtin.copy:
+    src: "{{ platform_repo_dir }}/{{ item }}"
+    dest: "/var/lib/rancher/k3s/server/manifests/{{ item | replace('/', '-') }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ platform_apps }}"
+
+- name: Create the namespace for the triage watcher's secrets
+  ansible.builtin.copy:
+    content: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: preflight-system
+    dest: /var/lib/rancher/k3s/server/manifests/preflight-system.yaml
+    owner: root
+    group: root
+    mode: "0600"

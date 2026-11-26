@@ -1,0 +1,14 @@
+---
+# Previews are served at pr-<N>.<this domain>. Terraform sets it from the VM's public IP.
+platform_preview_domain: preview.127.0.0.1.nip.io
+
+platform_argocd_chart_version: 10.11.6 # same as the local cluster
+
+# The repo's own manifests, reused as they are.
+platform_repo_dir: "{{ role_path }}/../../../../platform"
+
+# No Prometheus/Grafana: with them, the 4 GiB VM stalled on memory and disk I/O.
+platform_apps:
+  - observability/loki.yaml
+  - observability/alloy.yaml
+  - triage/app.yaml
