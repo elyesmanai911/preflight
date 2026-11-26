@@ -7,6 +7,10 @@ metadata:
   name: verify-preflight-images
 spec:
   validationActions: [Deny]
+  # Checking a signature means fetching it from ghcr.io and Sigstore. The default 10 s
+  # timeout is too short on a slow network (16 s measured on the local k3d cluster).
+  webhookConfiguration:
+    timeoutSeconds: 30
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
