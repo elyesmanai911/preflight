@@ -160,7 +160,7 @@ resource "azurerm_linux_virtual_machine" "demo" {
   name                  = "preflight-vm"
   location              = local.location
   resource_group_name   = local.rg
-  size                  = var.vm_size
+  size                  = var.vm_size # tflint-ignore: azurerm_linux_virtual_machine_retired_size
   zone                  = var.zone
   admin_username        = "preflight"
   network_interface_ids = [azurerm_network_interface.demo.id]
