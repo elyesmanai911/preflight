@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: elyesmanai911
+  description: Argo CD, the preview ApplicationSet and the platform apps, via k3s auto-applied manifests
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

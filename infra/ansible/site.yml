@@ -1,7 +1,12 @@
 ---
-# Configures the demo VM. Terraform creates it; this playbook makes it ready.
+# Configures the demo VM. Terraform creates it and writes inventory/demo.yml; this makes it ready:
+#   ansible-playbook -i inventory/demo.yml site.yml
 - name: Configure the Preflight VM
   hosts: demo
   become: true
   roles:
     - hardening
+    - k3s
+    - platform
+    - role: secrets
+      tags: [secrets, molecule-notest] # needs Azure's managed identity, so Molecule skips it

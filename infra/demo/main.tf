@@ -1,4 +1,4 @@
-# The cloud demo: one k3s VM that bootstraps the whole platform by itself.
+# The cloud demo: one VM, configured by Ansible (infra/ansible) once Terraform has created it.
 # Lives ONLY in preflight-demo, the resource group the guards (infra/guard) can delete at any time.
 
 data "azurerm_resource_group" "demo" {
@@ -158,22 +158,6 @@ resource "azurerm_linux_virtual_machine" "demo" {
   identity {
     type = "SystemAssigned"
   }
-
-  custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-    k3s_version = var.k3s_version
-    vault       = local.vault
-    # The repo's own manifests, reused as-is; only the preview domain changes for the cloud.
-    argocd_values = file("${path.module}/../../platform/argocd/values.yaml")
-    appset = replace(
-      file("${path.module}/../../platform/argocd/preview-appset.yaml"),
-      "preview.127.0.0.1.nip.io", "preview.${local.domain}"
-    )
-    # No Prometheus/Grafana here: with them, this 4 GiB VM stalled on memory and disk I/O.
-    platform_apps = join("\n---\n", [
-      for f in ["observability/loki.yaml", "observability/alloy.yaml", "triage/app.yaml"] :
-      file("${path.module}/../../platform/${f}")
-    ])
-  }))
 }
 
 # Stops compute billing every night, in case the demo is forgotten.
@@ -186,4 +170,24 @@ resource "azurerm_dev_test_global_vm_shutdown_schedule" "nightly" {
   notification_settings {
     enabled = false
   }
+}
+
+# Everything Ansible needs to reach and configure the VM. Holds no secrets: the VM reads those
+# from Key Vault itself.
+resource "local_file" "ansible_inventory" {
+  filename        = "${path.module}/../ansible/inventory/demo.yml"
+  file_permission = "0600"
+  content = yamlencode({
+    demo = {
+      hosts = {
+        preflight-vm = {
+          ansible_host                 = azurerm_public_ip.demo.ip_address
+          ansible_user                 = "preflight"
+          ansible_ssh_private_key_file = pathexpand("~/.ssh/preflight_azure")
+          platform_preview_domain      = "preview.${local.domain}"
+          secrets_vault_name           = local.vault
+        }
+      }
+    }
+  })
 }

@@ -29,8 +29,3 @@ variable "zone" {
   type        = string
   default     = null
 }
-
-variable "k3s_version" {
-  type    = string
-  default = "v1.35.5+k3s1" # same as the local k3d cluster
-}
