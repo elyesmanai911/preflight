@@ -20,8 +20,12 @@ variable "llm_api_key" {
 }
 
 variable "vm_size" {
-  type    = string
-  default = "Standard_B2s" # 2 vCPU, 4 GiB, ~$0.0416/h in East US
+  type = string
+  # 2 vCPU, 4 GiB, ~$0.0416/h in East US. Azure retires B-series v1 on 2028-11-15 and gives new
+  # subscriptions no quota for it; this one still has some, so main.tf silences TFLint's
+  # retired-size notice. The same-price successor, B2ls_v2, needs a Bsv2 quota request first
+  # (this subscription has 0).
+  default = "Standard_B2s"
 }
 
 variable "zone" {
