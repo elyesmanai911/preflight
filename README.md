@@ -235,6 +235,8 @@ Trade-offs, on purpose:
   "⏸️ preview paused", and the ApplicationSet then deletes the environment. The next push brings
   it back. (Deleting stale namespaces directly wouldn't work: the ApplicationSet would recreate
   them for any open PR.)
+- **Infracost on Terraform PRs:** the monthly cost of `infra/` before and after the change, as a
+  PR comment, so a bigger VM or a paid service shows up in review, not on the bill.
 
 ## Cloud demo cost guards (`infra/guard`)
 
