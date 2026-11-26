@@ -1,0 +1,11 @@
+---
+# Check the whole config first: a broken sshd_config would lock us out of the VM.
+- name: Reload SSH
+  ansible.builtin.command: sshd -t
+  changed_when: true
+  notify: Reload the SSH service
+
+- name: Reload the SSH service
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded

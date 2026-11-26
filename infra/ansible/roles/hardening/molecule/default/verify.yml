@@ -1,0 +1,53 @@
+---
+# Checks the effective state, not our files: what sshd and ufw actually run with.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the effective SSH settings
+      ansible.builtin.command: sshd -T
+      register: hardening_sshd
+      changed_when: false
+
+    - name: SSH allows keys only, for the preflight user only
+      ansible.builtin.assert:
+        that:
+          - "'permitrootlogin no' in hardening_sshd.stdout_lines"
+          - "'passwordauthentication no' in hardening_sshd.stdout_lines"
+          - "'kbdinteractiveauthentication no' in hardening_sshd.stdout_lines"
+          - "'allowusers preflight' in hardening_sshd.stdout_lines"
+
+    - name: Read the services
+      ansible.builtin.service_facts:
+
+    - name: SSH service is running
+      ansible.builtin.assert:
+        that: ansible_facts.services['ssh.service'].state == 'running'
+
+    - name: Read the firewall status
+      ansible.builtin.command: ufw status verbose
+      register: hardening_ufw
+      changed_when: false
+
+    - name: Firewall is on, denies inbound, opens only 22 and 80
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in hardening_ufw.stdout"
+          - "'deny (incoming)' in hardening_ufw.stdout"
+          - hardening_ufw.stdout is search('22/tcp\s+ALLOW IN\s+Anywhere')
+          - hardening_ufw.stdout is search('80/tcp\s+ALLOW IN\s+Anywhere')
+          - hardening_ufw.stdout is search('Anywhere\s+ALLOW IN\s+10\.42\.0\.0/16')
+          - hardening_ufw.stdout is not search('443/tcp|6443')
+
+    - name: Read the unattended-upgrades settings apt actually uses
+      ansible.builtin.command: apt-config dump
+      register: hardening_apt
+      changed_when: false
+
+    - name: Security updates install daily, with no automatic reboot
+      ansible.builtin.assert:
+        that:
+          - "'APT::Periodic::Unattended-Upgrade \"1\";' in hardening_apt.stdout"
+          - "'Unattended-Upgrade::Automatic-Reboot \"false\";' in hardening_apt.stdout"
+          - "hardening_apt.stdout is search('Allowed-Origins:: .*-security')"

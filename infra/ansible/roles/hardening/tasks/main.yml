@@ -1,0 +1,70 @@
+---
+# ---------- SSH: keys only, one user, no root ----------
+- name: Install the SSH server
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Harden SSH
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-preflight.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload SSH
+
+# ---------- Firewall: deny inbound by default ----------
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Open the public ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: tcp
+  loop: "{{ hardening_open_tcp_ports }}"
+
+- name: Trust the k3s pod and service networks
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+  loop: "{{ hardening_trusted_cidrs }}"
+
+- name: Deny other inbound traffic and enable the firewall
+  community.general.ufw:
+    state: enabled
+    direction: incoming
+    policy: deny
+
+# ---------- Automatic security updates ----------
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+- name: Install security updates daily, without rebooting
+  ansible.builtin.copy:
+    dest: "/etc/apt/apt.conf.d/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - name: 20auto-upgrades
+      content: |
+        APT::Periodic::Update-Package-Lists "1";
+        APT::Periodic::Unattended-Upgrade "1";
+    - name: 52preflight-upgrades
+      content: |
+        // Security updates only. No automatic reboot: this single node runs the whole platform.
+        Unattended-Upgrade::Allowed-Origins {
+            "${distro_id}:${distro_codename}-security";
+        };
+        Unattended-Upgrade::Automatic-Reboot "false";
+  loop_control:
+    label: "{{ item.name }}"

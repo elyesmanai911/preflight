@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+X11Forwarding no
+MaxAuthTries 3
+AllowUsers {{ hardening_ssh_user }}

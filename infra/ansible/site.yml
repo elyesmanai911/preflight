@@ -1,0 +1,7 @@
+---
+# Configures the demo VM. Terraform creates it; this playbook makes it ready.
+- name: Configure the Preflight VM
+  hosts: demo
+  become: true
+  roles:
+    - hardening
