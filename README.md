@@ -21,7 +21,7 @@ and the in-cluster triage agent posts the root cause and fix from the pod's logs
 ## How it will work
 
 1. A developer opens a PR on the demo app.
-2. **CI** (GitHub Actions): lint → test → train model + quality gate → build image → Trivy scan → push to GHCR.
+2. **CI** (GitHub Actions): lint → test → train model + quality gate → build image → push to GHCR → Trivy scan → SBOM (Syft) → sign (Cosign).
 3. **GitOps** (Argo CD ApplicationSet, Pull Request generator): deploys the image into an
    isolated namespace `pr-<number>` with its own URL.
 4. **AI release agent** (Python, any OpenAI-compatible LLM: a free API tier in CI, Ollama
@@ -185,6 +185,42 @@ one is the watcher's real output.
 **Lessons:** the fix for #12's made-up diagnosis was better evidence, not a better model. Known
 limitation (#16): warning events from before the current pod started still reach the LLM.
 
+## Supply chain: only signed images run
+
+Every image CI pushes (the app on every PR and `main`, the triage watcher on `main`) gets:
+
+1. an **SBOM** from Syft (SPDX JSON, also uploaded as a workflow artifact): every package inside;
+2. a **Cosign signature**, keyless: GitHub's OIDC token proves "built by `ci.yml` in this repo",
+   and Sigstore records it in its public transparency log. No signing key to store or leak;
+3. the SBOM as a **signed attestation** attached to the image.
+
+In the cluster, **Kyverno** (`platform/supply-chain/`) checks every pod, Deployment and CronJob
+that uses a `ghcr.io/elyesmanai911/preflight-*` image. No signature from this repo's CI, or no
+signed SBOM, and the request is refused:
+
+```text
+$ kubectl run test --image=ghcr.io/elyesmanai911/preflight-app:<unsigned tag>
+admission webhook "ivpol.validate.kyverno.svc-fail" denied the request: Policy verify-preflight-images
+failed: image is not signed by this repo's CI; ... no signatures found
+```
+
+Check an image by hand:
+
+```bash
+cosign verify ghcr.io/elyesmanai911/preflight-app:<tag> \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/elyesmanai911/preflight/\.github/workflows/ci\.yml@'
+```
+
+Trade-offs, on purpose:
+
+- **Fail closed.** If Kyverno is down, every new pod, Deployment and CronJob is refused until
+  it's back, whatever its image. `kube-system` and `kyverno` are excluded, so it can always
+  restart itself.
+- **Tags stay tags.** Kyverno doesn't rewrite them to digests, or Argo CD would see drift forever.
+  Tags here are commit SHAs; `:main` for the triage CronJob is checked again on every new pod.
+- A preview is refused for the few minutes until CI has signed its image; Argo CD retries.
+
 ## Cost guardrails
 
 - **Quota per preview:** each `pr-<N>` namespace gets a ResourceQuota (5 pods, 500m CPU and
@@ -263,6 +299,9 @@ kubectl apply -f platform/argocd/preview-appset.yaml
 
 # 4. Observability: Prometheus, Grafana, Loki, Alloy (installed and kept in sync by Argo CD)
 kubectl apply -f platform/observability/
+
+# 5. Supply chain: Kyverno + the policy that only admits images CI signed
+kubectl apply -f platform/supply-chain/
 ```
 
 Grafana: `kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80`, then
