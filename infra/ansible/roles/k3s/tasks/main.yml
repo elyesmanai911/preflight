@@ -1,4 +1,26 @@
 ---
+# Kubernetes' upgrade rules: no downgrades, and one minor version at a time.
+# Checked before anything changes, so a typo in k3s_version can't break the cluster.
+- name: Read the installed k3s version
+  ansible.builtin.command: /usr/local/bin/k3s --version
+  register: k3s_installed
+  changed_when: false
+  failed_when: false
+
+- name: Refuse a downgrade or a skipped minor version
+  when: k3s_installed.rc == 0
+  vars:
+    k3s_from: "{{ k3s_installed.stdout | regex_search('v(\\d+\\.\\d+\\.\\d+)', '\\1') | first }}"
+    k3s_to: "{{ k3s_version | regex_search('v(\\d+\\.\\d+\\.\\d+)', '\\1') | first }}"
+  ansible.builtin.assert:
+    that:
+      - k3s_to is version(k3s_from, '>=')
+      - (k3s_to.split('.')[1] | int) - (k3s_from.split('.')[1] | int) <= 1
+    fail_msg: >-
+      k3s {{ k3s_from }} -> {{ k3s_to }} is not allowed: Kubernetes can't be downgraded,
+      and upgrades go one minor version at a time.
+    quiet: true
+
 # The pinned binary from the GitHub release, checked against the release's own checksum file.
 # No `curl | sh`: what runs is exactly what this file says.
 - name: Install the k3s binary

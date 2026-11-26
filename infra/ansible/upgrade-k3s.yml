@@ -1,0 +1,35 @@
+---
+# Day 2: upgrade k3s in place, without rebuilding the VM.
+#   1. Bump k3s_version in roles/k3s/defaults/main.yml (one minor version at most) in a PR.
+#   2. ansible-playbook -i inventory/demo.yml upgrade-k3s.yml
+# Only the k3s role runs: the rest of the VM isn't touched. The role refuses downgrades.
+- name: Upgrade k3s
+  hosts: demo
+  become: true
+  serial: 1 # one node at a time, should there ever be more than one
+  roles:
+    - k3s
+  post_tasks:
+    # Right after the restart the node object still shows its old status for a few seconds,
+    # so wait for the new version to be reported, then for Ready on that fresh status.
+    - name: Wait for the node to report the new version
+      ansible.builtin.command: >-
+        k3s kubectl get nodes -o jsonpath={.items[*].status.nodeInfo.kubeletVersion}
+      register: upgrade_node_version
+      until: upgrade_node_version.stdout == k3s_version
+      retries: 30
+      delay: 5
+      changed_when: false
+
+    - name: The upgraded node is Ready
+      ansible.builtin.command: k3s kubectl wait node --all --for=condition=Ready --timeout=120s
+      changed_when: false
+
+    - name: The system components (DNS, Traefik, storage) are available again
+      ansible.builtin.command: >-
+        k3s kubectl -n kube-system wait deployment --all --for=condition=Available --timeout=10s
+      register: upgrade_system
+      until: upgrade_system.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false

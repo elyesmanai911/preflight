@@ -1,0 +1,8 @@
+---
+- name: Prepare a cluster on the previous minor version
+  hosts: all
+  become: true
+  roles:
+    - role: k3s
+      vars:
+        k3s_version: v1.34.13+k3s1

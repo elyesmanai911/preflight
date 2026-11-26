@@ -1,0 +1,19 @@
+---
+- name: Try k3s {{ upgrade_test_target }}
+  block:
+    - name: Run the k3s role with {{ upgrade_test_target }}
+      ansible.builtin.include_role:
+        name: k3s
+      vars:
+        k3s_version: "{{ upgrade_test_target }}"
+
+    - name: This line must not be reached
+      ansible.builtin.fail:
+        msg: "k3s {{ upgrade_test_target }} was accepted"
+      register: upgrade_test_accepted
+  rescue:
+    - name: Refused for the right reason
+      ansible.builtin.assert:
+        that:
+          - upgrade_test_accepted is not defined or upgrade_test_accepted is skipped
+          - "'is not allowed' in ansible_failed_result.msg"
