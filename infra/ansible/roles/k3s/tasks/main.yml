@@ -38,9 +38,21 @@
   ansible.builtin.meta: flush_handlers
 
 - name: Wait for the node to be Ready
-  ansible.builtin.command: k3s kubectl wait node --all --for=condition=Ready --timeout=10s
-  register: k3s_node_ready
-  until: k3s_node_ready.rc == 0
-  retries: 30
-  delay: 5
-  changed_when: false
+  block:
+    - name: Wait for the node to be Ready
+      ansible.builtin.command: k3s kubectl wait node --all --for=condition=Ready --timeout=10s
+      register: k3s_node_ready
+      until: k3s_node_ready.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: false
+  rescue:
+    # Show why, instead of only "connection refused".
+    - name: Read k3s's last log lines
+      ansible.builtin.command: journalctl -u k3s --no-pager -n 60
+      register: k3s_journal
+      changed_when: false
+
+    - name: Fail with k3s's own error
+      ansible.builtin.fail:
+        msg: "{{ k3s_journal.stdout_lines }}"
